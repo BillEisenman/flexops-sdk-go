@@ -4,14 +4,14 @@ import "context"
 
 type ShippingService struct{ c *Client }
 
-func (s *ShippingService) GetRates(ctx context.Context, req RateRequest) (ApiResponse[[]ShippingRate], error) {
-	return decode[ApiResponse[[]ShippingRate]](s.c.http.post(ctx, s.c.wsPath("shipping/rates"), req))
+func (s *ShippingService) GetRates(ctx context.Context, req RateRequest) (RateShoppingResponse, error) {
+	return decode[RateShoppingResponse](s.c.http.post(ctx, "/api/shipping/rates", req))
 }
-func (s *ShippingService) GetCheapestRate(ctx context.Context, req RateRequest) (ApiResponse[ShippingRate], error) {
-	return decode[ApiResponse[ShippingRate]](s.c.http.post(ctx, s.c.wsPath("shipping/rates/cheapest"), req))
+func (s *ShippingService) GetCheapestRate(ctx context.Context, req RateRequest) (ShippingRate, error) {
+	return decode[ShippingRate](s.c.http.post(ctx, "/api/shipping/rates/cheapest", req))
 }
-func (s *ShippingService) GetFastestRate(ctx context.Context, req RateRequest) (ApiResponse[ShippingRate], error) {
-	return decode[ApiResponse[ShippingRate]](s.c.http.post(ctx, s.c.wsPath("shipping/rates/fastest"), req))
+func (s *ShippingService) GetFastestRate(ctx context.Context, req RateRequest) (ShippingRate, error) {
+	return decode[ShippingRate](s.c.http.post(ctx, "/api/shipping/rates/fastest", req))
 }
 func (s *ShippingService) CreateLabel(ctx context.Context, req CreateLabelRequest) (ApiResponse[Label], error) {
 	return decode[ApiResponse[Label]](s.c.http.post(ctx, s.c.wsPath("shipping/labels"), req))
