@@ -42,6 +42,14 @@ func computeHMAC(payload, secret string) string {
 	return hex.EncodeToString(mac.Sum(nil))
 }
 
+func rateRequest() flexops.RateRequest {
+	return flexops.RateRequest{
+		Origin:      flexops.ShippingAddress{AddressLine1: "123 Main St", City: "New York", StateProvince: "NY", PostalCode: "10001"},
+		Destination: flexops.ShippingAddress{AddressLine1: "456 Oak Ave", City: "Los Angeles", StateProvince: "CA", PostalCode: "90210"},
+		Package:     flexops.ShippingPackage{Weight: 16, WeightUnit: "oz"},
+	}
+}
+
 // ---------------------------------------------------------------------------
 // 1. Client initialisation — API key auth
 // ---------------------------------------------------------------------------
@@ -53,9 +61,7 @@ func TestClient_APIKeyAuth(t *testing.T) {
 		writeJSON(w, 200, map[string]any{"success": true, "data": []any{}})
 	}))
 
-	_, _ = client.Shipping.GetRates(context.Background(), flexops.RateRequest{
-		FromZip: "10001", ToZip: "90210", Weight: 16,
-	})
+	_, _ = client.Shipping.GetRates(context.Background(), rateRequest())
 
 	if gotHeader != "sk_test_key" {
 		t.Errorf("expected X-Api-Key header = sk_test_key, got %q", gotHeader)
@@ -80,9 +86,7 @@ func TestClient_BearerTokenAuth(t *testing.T) {
 		BaseURL:     srv.URL,
 	})
 
-	_, _ = client.Shipping.GetRates(context.Background(), flexops.RateRequest{
-		FromZip: "10001", ToZip: "90210", Weight: 16,
-	})
+	_, _ = client.Shipping.GetRates(context.Background(), rateRequest())
 
 	if gotHeader != "Bearer jwt_test_token" {
 		t.Errorf("expected Authorization = 'Bearer jwt_test_token', got %q", gotHeader)
@@ -101,7 +105,7 @@ func TestClient_SetAccessToken(t *testing.T) {
 	}))
 
 	client.SetAccessToken("new_jwt_token")
-	_, _ = client.Shipping.GetRates(context.Background(), flexops.RateRequest{FromZip: "10001", ToZip: "90210"})
+	_, _ = client.Shipping.GetRates(context.Background(), rateRequest())
 
 	if gotAuth != "Bearer new_jwt_token" {
 		t.Errorf("expected Bearer new_jwt_token, got %q", gotAuth)
@@ -158,20 +162,26 @@ func TestShipping_GetRates(t *testing.T) {
 		{Carrier: "fedex", Service: "express", Rate: 18.90, EstimatedDays: 1},
 	}
 	client, _ := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, 200, map[string]any{"success": true, "data": rates})
+		if r.URL.Path != "/api/shipping/rates" {
+			t.Errorf("expected /api/shipping/rates, got %q", r.URL.Path)
+		}
+		var request map[string]any
+		_ = json.NewDecoder(r.Body).Decode(&request)
+		if request["origin"] == nil || request["destination"] == nil || request["package"] == nil {
+			t.Errorf("expected canonical origin/destination/package body, got %#v", request)
+		}
+		writeJSON(w, 200, map[string]any{"currency": "USD", "rates": rates})
 	}))
 
-	resp, err := client.Shipping.GetRates(context.Background(), flexops.RateRequest{
-		FromZip: "80202", ToZip: "10001", Weight: 32,
-	})
+	resp, err := client.Shipping.GetRates(context.Background(), rateRequest())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if len(resp.Data) != 2 {
-		t.Fatalf("expected 2 rates, got %d", len(resp.Data))
+	if len(resp.Rates) != 2 {
+		t.Fatalf("expected 2 rates, got %d", len(resp.Rates))
 	}
-	if resp.Data[0].Carrier != "ups" {
-		t.Errorf("expected first carrier = ups, got %q", resp.Data[0].Carrier)
+	if resp.Rates[0].Carrier != "ups" {
+		t.Errorf("expected first carrier = ups, got %q", resp.Rates[0].Carrier)
 	}
 }
 
@@ -248,7 +258,7 @@ func TestRetry_429_EventualSuccess(t *testing.T) {
 		writeJSON(w, 200, map[string]any{"success": true, "data": []any{}})
 	}))
 
-	_, err := client.Shipping.GetRates(context.Background(), flexops.RateRequest{FromZip: "10001", ToZip: "90210"})
+	_, err := client.Shipping.GetRates(context.Background(), rateRequest())
 	if err != nil {
 		t.Fatalf("expected eventual success after retries, got: %v", err)
 	}
@@ -266,7 +276,7 @@ func TestError_401_ReturnsAuthError(t *testing.T) {
 		w.WriteHeader(401)
 	}))
 
-	_, err := client.Shipping.GetRates(context.Background(), flexops.RateRequest{FromZip: "10001", ToZip: "90210"})
+	_, err := client.Shipping.GetRates(context.Background(), rateRequest())
 	if err == nil {
 		t.Fatal("expected AuthError, got nil")
 	}

@@ -32,16 +32,16 @@ func main() {
 
     // Get shipping rates from all carriers
     rates, err := client.Shipping.GetRates(ctx, flexops.RateRequest{
-        FromAddress: flexops.Address{Street1: "123 Main St", City: "New York",    State: "NY", Zip: "10001", Country: "US"},
-        ToAddress:   flexops.Address{Street1: "456 Oak Ave", City: "Los Angeles", State: "CA", Zip: "90210", Country: "US"},
-        Parcel:      flexops.Parcel{Weight: 16, WeightUnit: "oz"},
+        Origin: flexops.ShippingAddress{AddressLine1: "123 Main St", City: "New York", StateProvince: "NY", PostalCode: "10001"},
+        Destination: flexops.ShippingAddress{AddressLine1: "456 Oak Ave", City: "Los Angeles", StateProvince: "CA", PostalCode: "90210"},
+        Package: flexops.ShippingPackage{Weight: 16, WeightUnit: "oz"},
     })
     if err != nil {
         log.Fatal(err)
     }
 
     // Create a label with the cheapest rate
-    cheapest := rates.Data[0] // rates are returned sorted by total cost
+    cheapest := rates.Rates[0] // rates are returned sorted by price
     label, err := client.Shipping.CreateLabel(ctx, flexops.CreateLabelRequest{
         Carrier:     cheapest.Carrier,
         Service:     cheapest.Service,
@@ -137,13 +137,13 @@ Every SDK method is a thin wrapper around the FlexOps REST API. If you want to v
 
 ```bash
 # Shop rates across all connected carriers
-curl -X POST https://gateway.flexops.io/api/workspaces/ws_abc123/shipping/rates \
+curl -X POST https://gateway.flexops.io/api/shipping/rates \
   -H "X-API-Key: fxk_live_..." \
   -H "Content-Type: application/json" \
   -d '{
-    "fromAddress": {"street1": "123 Main St", "city": "New York", "state": "NY", "zip": "10001", "country": "US"},
-    "toAddress":   {"street1": "456 Oak Ave", "city": "Los Angeles", "state": "CA", "zip": "90210", "country": "US"},
-    "parcel":      {"weight": 16, "weightUnit": "oz"}
+    "origin": {"addressLine1": "123 Main St", "city": "New York", "stateProvince": "NY", "postalCode": "10001", "countryCode": "US"},
+    "destination": {"addressLine1": "456 Oak Ave", "city": "Los Angeles", "stateProvince": "CA", "postalCode": "90210", "countryCode": "US"},
+    "package": {"weight": 16, "weightUnit": "oz"}
   }'
 
 # Create a label

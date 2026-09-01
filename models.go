@@ -83,22 +83,64 @@ type Parcel struct {
 }
 
 type RateRequest struct {
-	FromZip    string  `json:"fromZip,omitempty"`
-	ToZip      string  `json:"toZip,omitempty"`
-	Weight     float64 `json:"weight,omitempty"`
-	WeightUnit string  `json:"weightUnit,omitempty"`
-	From       *Address `json:"fromAddress,omitempty"`
-	To         *Address `json:"toAddress,omitempty"`
-	Parcel     *Parcel  `json:"parcel,omitempty"`
+	Origin      ShippingAddress `json:"origin"`
+	Destination ShippingAddress `json:"destination"`
+	Package     ShippingPackage `json:"package"`
+	Carriers    []string        `json:"carriers,omitempty"`
+	// Deprecated: use Origin, Destination, and Package.
+	FromZip string `json:"fromZip,omitempty"`
+	// Deprecated: use Origin, Destination, and Package.
+	ToZip string `json:"toZip,omitempty"`
+	// Deprecated: use Package.Weight.
+	Weight float64 `json:"weight,omitempty"`
+	// Deprecated: use Package.WeightUnit.
+	WeightUnit string `json:"weightUnit,omitempty"`
+	// Deprecated: use Package.Length.
+	Length float64 `json:"length,omitempty"`
+	// Deprecated: use Package.Width.
+	Width float64 `json:"width,omitempty"`
+	// Deprecated: use Package.Height.
+	Height float64 `json:"height,omitempty"`
+	// Deprecated: use Package.DimensionUnit.
+	DimensionUnit string `json:"dimensionUnit,omitempty"`
+	// Deprecated: use Package.PredefinedPackage.
+	PackageType string `json:"packageType,omitempty"`
+}
+
+type ShippingAddress struct {
+	Name          string `json:"name,omitempty"`
+	AddressLine1  string `json:"addressLine1"`
+	AddressLine2  string `json:"addressLine2,omitempty"`
+	City          string `json:"city"`
+	StateProvince string `json:"stateProvince"`
+	PostalCode    string `json:"postalCode"`
+	CountryCode   string `json:"countryCode,omitempty"`
+}
+
+type ShippingPackage struct {
+	Weight            float64 `json:"weight"`
+	WeightUnit        string  `json:"weightUnit,omitempty"`
+	Length            float64 `json:"length,omitempty"`
+	Width             float64 `json:"width,omitempty"`
+	Height            float64 `json:"height,omitempty"`
+	DimensionUnit     string  `json:"dimensionUnit,omitempty"`
+	PredefinedPackage string  `json:"predefinedPackage,omitempty"`
 }
 
 type ShippingRate struct {
-	Carrier       string  `json:"carrier"`
-	Service       string  `json:"service"`
+	Carrier       string  `json:"carrierCode"`
+	CarrierName   string  `json:"carrierName"`
+	Service       string  `json:"serviceCode"`
+	ServiceName   string  `json:"serviceName"`
 	Rate          float64 `json:"rate"`
 	Currency      string  `json:"currency"`
 	EstimatedDays int     `json:"estimatedDays"`
 	DeliveryDate  string  `json:"deliveryDate,omitempty"`
+}
+
+type RateShoppingResponse struct {
+	Rates    []ShippingRate `json:"rates"`
+	Currency string         `json:"currency"`
 }
 
 type CreateLabelRequest struct {
@@ -137,10 +179,10 @@ type TrackingInfo struct {
 }
 
 type AddressValidationResult struct {
-	IsValid       bool     `json:"isValid"`
-	Normalized    *Address `json:"normalized,omitempty"`
-	Suggestions   []Address `json:"suggestions,omitempty"`
-	Errors        []string `json:"errors,omitempty"`
+	IsValid     bool      `json:"isValid"`
+	Normalized  *Address  `json:"normalized,omitempty"`
+	Suggestions []Address `json:"suggestions,omitempty"`
+	Errors      []string  `json:"errors,omitempty"`
 }
 
 type BatchLabelRequest struct {
