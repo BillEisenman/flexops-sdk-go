@@ -1,6 +1,10 @@
 package flexops
 
-import "context"
+import (
+	"context"
+	"fmt"
+	"net/http"
+)
 
 type ShippingService struct{ c *Client }
 
@@ -13,8 +17,18 @@ func (s *ShippingService) GetCheapestRate(ctx context.Context, req RateRequest) 
 func (s *ShippingService) GetFastestRate(ctx context.Context, req RateRequest) (ShippingRate, error) {
 	return decode[ShippingRate](s.c.http.post(ctx, "/api/shipping/rates/fastest", req))
 }
-func (s *ShippingService) CreateLabel(ctx context.Context, req CreateLabelRequest) (ApiResponse[Label], error) {
-	return decode[ApiResponse[Label]](s.c.http.post(ctx, s.c.wsPath("shipping/labels"), req))
+
+// CreateLabel previews unless ConfirmationToken is supplied. For a purchase,
+// supply one idempotency key and reuse it on retries; never automatically confirm.
+func (s *ShippingService) CreateLabel(ctx context.Context, req CreateLabelRequest, idempotencyKey ...string) (LabelPurchaseResult, error) {
+	if len(idempotencyKey) > 1 {
+		return LabelPurchaseResult{}, fmt.Errorf("supply at most one idempotency key")
+	}
+	headers := http.Header{}
+	if len(idempotencyKey) == 1 {
+		headers.Set("Idempotency-Key", idempotencyKey[0])
+	}
+	return decode[LabelPurchaseResult](s.c.http.do(ctx, http.MethodPost, s.c.wsPath("shipping/labels"), nil, req, headers))
 }
 func (s *ShippingService) CancelLabel(ctx context.Context, labelID string) error {
 	_, err := s.c.http.del(ctx, s.c.wsPath("shipping/labels/"+labelID))

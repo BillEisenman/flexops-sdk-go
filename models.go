@@ -144,18 +144,32 @@ type RateShoppingResponse struct {
 }
 
 type CreateLabelRequest struct {
-	Carrier     string   `json:"carrier"`
-	Service     string   `json:"service"`
-	FromAddress *Address `json:"fromAddress"`
-	ToAddress   *Address `json:"toAddress"`
-	Parcel      *Parcel  `json:"parcel"`
+	CarrierCode          string          `json:"carrierCode"`
+	ServiceCode          string          `json:"serviceCode"`
+	Origin               ShippingAddress `json:"origin"`
+	Destination          ShippingAddress `json:"destination"`
+	Package              ShippingPackage `json:"package"`
+	MaximumPostageAmount float64         `json:"maximumPostageAmount,omitempty"`
+	ConfirmationToken    string          `json:"confirmationToken,omitempty"`
+	LabelFormat          string          `json:"labelFormat,omitempty"`
+}
+
+// LabelPurchaseResult is the unwrapped Gateway response. Status == "Preview"
+// means no purchase occurred; only a confirmed purchase contains LabelID.
+type LabelPurchaseResult struct {
+	Label
+	Status               string  `json:"status,omitempty"`
+	QuotedPostageAmount  float64 `json:"quotedPostageAmount,omitempty"`
+	MaximumPostageAmount float64 `json:"maximumPostageAmount,omitempty"`
+	ExpiresAt            string  `json:"expiresAt,omitempty"`
+	ConfirmationToken    string  `json:"confirmationToken,omitempty"`
 }
 
 type Label struct {
 	LabelID        string  `json:"labelId"`
 	TrackingNumber string  `json:"trackingNumber"`
-	Carrier        string  `json:"carrier"`
-	Service        string  `json:"service"`
+	CarrierCode    string  `json:"carrierCode"`
+	Currency       string  `json:"currency"`
 	LabelData      string  `json:"labelData"`
 	LabelFormat    string  `json:"labelFormat"`
 	Rate           float64 `json:"rate"`

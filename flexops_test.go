@@ -190,29 +190,67 @@ func TestShipping_GetRates(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestShipping_CreateLabel(t *testing.T) {
-	label := flexops.Label{
-		LabelID: "lbl_abc123", TrackingNumber: "1Z999AA10123456784",
-		Carrier: "ups", Rate: 8.42,
-	}
+	calls := 0
 	client, _ := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, 200, map[string]any{"success": true, "data": label})
+		calls++
+		var body map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatal(err)
+		}
+		if body["carrierCode"] != "USPS" || body["maximumPostageAmount"] != 10.25 || body["origin"] == nil || body["package"] == nil {
+			t.Errorf("bad body: %v", body)
+		}
+		if calls == 1 || calls == 4 {
+			if body["confirmationToken"] != nil || r.Header.Get("Idempotency-Key") != "" {
+				t.Error("preview contains confirmation")
+			}
+			writeJSON(w, 200, map[string]any{"status": "Preview", "quotedPostageAmount": 8.5, "maximumPostageAmount": 10.25, "confirmationToken": "approval", "currency": "USD", "expiresAt": "2026-09-19T00:05:00Z"})
+		} else {
+			if r.Header.Get("Idempotency-Key") != "purchase-001" || body["confirmationToken"] != "approval" {
+				t.Error("missing purchase approval")
+			}
+			if calls == 2 {
+				writeJSON(w, 503, map[string]string{"message": "temporary"})
+				return
+			}
+			writeJSON(w, 201, map[string]any{"labelId": "lbl-001", "carrierCode": "USPS", "trackingNumber": "tracking", "rate": 8.5, "currency": "USD"})
+		}
 	}))
+	request := flexops.CreateLabelRequest{CarrierCode: "USPS", ServiceCode: "GROUND_ADVANTAGE", MaximumPostageAmount: 10.25,
+		Origin: flexops.ShippingAddress{AddressLine1: "1 St", CountryCode: "US"}, Destination: flexops.ShippingAddress{AddressLine1: "2 St", CountryCode: "US"}, Package: flexops.ShippingPackage{Weight: 16}}
+	preview, err := client.Shipping.CreateLabel(context.Background(), request)
+	if err != nil || preview.Status != "Preview" || preview.ConfirmationToken != "approval" || preview.QuotedPostageAmount != 8.5 || calls != 1 {
+		t.Fatalf("bad preview: %+v %v", preview, err)
+	}
+	request.ConfirmationToken = preview.ConfirmationToken
+	label, err := client.Shipping.CreateLabel(context.Background(), request, "purchase-001")
+	if err != nil || label.LabelID != "lbl-001" || label.CarrierCode != "USPS" || label.Status == "Preview" || calls != 3 {
+		t.Fatalf("bad purchase: %+v %v", label, err)
+	}
+	request.ConfirmationToken = ""
+	preview, err = client.Shipping.CreateLabel(context.Background(), request)
+	if err != nil || preview.Status != "Preview" || calls != 4 {
+		t.Fatalf("bad subsequent preview: %+v %v", preview, err)
+	}
+}
 
-	resp, err := client.Shipping.CreateLabel(context.Background(), flexops.CreateLabelRequest{
-		Carrier:     "ups",
-		Service:     "ground",
-		FromAddress: &flexops.Address{Name: "Sender", Street1: "123 Main St", City: "Denver", State: "CO", Zip: "80202", Country: "US"},
-		ToAddress:   &flexops.Address{Name: "Recipient", Street1: "456 Park Ave", City: "New York", State: "NY", Zip: "10001", Country: "US"},
-		Parcel:      &flexops.Parcel{Weight: 32},
-	})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if resp.Data.LabelID != "lbl_abc123" {
-		t.Errorf("expected labelId = lbl_abc123, got %q", resp.Data.LabelID)
-	}
-	if resp.Data.TrackingNumber != "1Z999AA10123456784" {
-		t.Errorf("unexpected tracking number: %q", resp.Data.TrackingNumber)
+func TestShipping_LabelApprovalErrors(t *testing.T) {
+	for _, tc := range []struct {
+		status int
+		code   string
+	}{{400, "ApprovalRequired"}, {409, "ApprovalExpired"}} {
+		t.Run(tc.code, func(t *testing.T) {
+			calls := 0
+			client, _ := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				calls++
+				writeJSON(w, tc.status, map[string]string{"errorCode": tc.code, "message": tc.code})
+			}))
+			_, err := client.Shipping.CreateLabel(context.Background(), flexops.CreateLabelRequest{})
+			apiErr, ok := err.(*flexops.FlexOpsError)
+			if !ok || apiErr.Code != tc.code || apiErr.StatusCode != tc.status || calls != 1 {
+				t.Fatalf("unexpected error: %v", err)
+			}
+		})
 	}
 }
 

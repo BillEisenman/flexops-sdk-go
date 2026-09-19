@@ -58,7 +58,7 @@ func newHTTPClient(cfg Config) *httpClient {
 }
 
 func (h *httpClient) setAccessToken(token string) { h.accessToken = token; h.apiKey = "" }
-func (h *httpClient) setAPIKey(key string)         { h.apiKey = key; h.accessToken = "" }
+func (h *httpClient) setAPIKey(key string)        { h.apiKey = key; h.accessToken = "" }
 
 func (h *httpClient) get(ctx context.Context, path string, query url.Values) ([]byte, error) {
 	return h.do(ctx, http.MethodGet, path, query, nil)
@@ -80,7 +80,7 @@ func (h *httpClient) del(ctx context.Context, path string) ([]byte, error) {
 	return h.do(ctx, http.MethodDelete, path, nil, nil)
 }
 
-func (h *httpClient) do(ctx context.Context, method, path string, query url.Values, body any) ([]byte, error) {
+func (h *httpClient) do(ctx context.Context, method, path string, query url.Values, body any, extraHeaders ...http.Header) ([]byte, error) {
 	u := h.buildURL(path, query)
 	var lastErr error
 
@@ -101,6 +101,11 @@ func (h *httpClient) do(ctx context.Context, method, path string, query url.Valu
 		req, err := http.NewRequestWithContext(ctx, method, u, bodyReader)
 		if err != nil {
 			return nil, err
+		}
+		for _, headers := range extraHeaders {
+			for name, values := range headers {
+				req.Header[name] = append([]string(nil), values...)
+			}
 		}
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("Accept", "application/json")
@@ -139,15 +144,20 @@ func (h *httpClient) do(ctx context.Context, method, path string, query url.Valu
 		}
 
 		var errBody struct {
-			Message string   `json:"message"`
-			Errors  []string `json:"errors"`
+			Code      string   `json:"code"`
+			ErrorCode string   `json:"errorCode"`
+			Message   string   `json:"message"`
+			Errors    []string `json:"errors"`
 		}
 		_ = json.Unmarshal(respBody, &errBody)
+		if errBody.ErrorCode != "" {
+			errBody.Code = errBody.ErrorCode
+		}
 		msg := errBody.Message
 		if msg == "" {
 			msg = fmt.Sprintf("HTTP %d", resp.StatusCode)
 		}
-		apiErr := &FlexOpsError{StatusCode: resp.StatusCode, Message: msg, Errors: errBody.Errors}
+		apiErr := &FlexOpsError{StatusCode: resp.StatusCode, Code: errBody.Code, Message: msg, Errors: errBody.Errors}
 
 		if retryableStatuses[resp.StatusCode] {
 			lastErr = apiErr

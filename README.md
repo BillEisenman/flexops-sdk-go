@@ -40,21 +40,25 @@ func main() {
         log.Fatal(err)
     }
 
-    // Create a label with the cheapest rate
-    cheapest := rates.Rates[0] // rates are returned sorted by price
-    label, err := client.Shipping.CreateLabel(ctx, flexops.CreateLabelRequest{
-        Carrier:     cheapest.Carrier,
-        Service:     cheapest.Service,
-        FromAddress: flexops.Address{Name: "Warehouse", Street1: "123 Main St", City: "New York",    State: "NY", Zip: "10001", Country: "US"},
-        ToAddress:   flexops.Address{Name: "Customer",  Street1: "456 Oak Ave", City: "Los Angeles", State: "CA", Zip: "90210", Country: "US"},
-        Parcel:      flexops.Parcel{Weight: 16, WeightUnit: "oz"},
-    })
-    if err != nil {
-        log.Fatal(err)
+    request := flexops.CreateLabelRequest{
+        CarrierCode: "USPS", ServiceCode: "GROUND_ADVANTAGE",
+        Origin: flexops.ShippingAddress{Name: "Warehouse", AddressLine1: "123 Main St", City: "New York", StateProvince: "NY", PostalCode: "10001", CountryCode: "US"},
+        Destination: flexops.ShippingAddress{Name: "Customer", AddressLine1: "456 Oak Ave", City: "Los Angeles", StateProvince: "CA", PostalCode: "90210", CountryCode: "US"},
+        Package: flexops.ShippingPackage{Weight: 16, WeightUnit: "oz"},
+        MaximumPostageAmount: 10.25, // Caller-approved ceiling in USD.
     }
+    preview, err := client.Shipping.CreateLabel(ctx, request)
+    if err != nil { log.Fatal(err) }
+    fmt.Println(preview.QuotedPostageAmount, preview.ExpiresAt)
 
-    fmt.Printf("Label URL: %s\n", label.Data.LabelURL)
-    fmt.Printf("Tracking:  %s\n", label.Data.TrackingNumber)
+    // Invoke only after explicit caller approval, within five minutes.
+    purchaseApprovedLabel := func(purchaseKey string) (flexops.LabelPurchaseResult, error) {
+        request.ConfirmationToken = preview.ConfirmationToken
+        return client.Shipping.CreateLabel(ctx, request, purchaseKey)
+    }
+    _ = purchaseApprovedLabel // Connect to your approval flow; persist/reuse the key.
+
+    fmt.Println(rates.Rates)
 
     // Track a shipment
     info, err := client.Shipping.Track(ctx, "9400111899223456789012")
@@ -64,6 +68,32 @@ func main() {
     fmt.Printf("Status: %s\n", info.Data.Status)
 }
 ```
+
+### Live label approval (unreleased SDK changes)
+
+Migration: `CreateLabel` now returns `LabelPurchaseResult`, with purchased fields
+directly on the result instead of under `Data`. Request fields now match Gateway:
+`CarrierCode`, `ServiceCode`, `Origin`, `Destination`, and `Package`.
+
+The example below requires this source revision; the published 1.0.2 packages do
+not include the new per-call idempotency argument. Release these SDK changes before
+using that argument from a package registry.
+
+For live domestic single-label requests, `maximumPostageAmount` is required: positive
+USD, at most two decimal places, up to 1,000,000. Missing or invalid values return
+400 `ApprovalRequired`. Omitting `confirmationToken` returns a raw 200 preview
+(`status`, `quotedPostageAmount`, `maximumPostageAmount`, `currency`, `expiresAt`,
+`confirmationToken`). After explicit approval, resubmit the same shipment and ceiling
+with the token and a unique per-purchase `Idempotency-Key` header. The token expires
+after five minutes. A successful purchase returns the raw 201 label, including
+`labelId`, `trackingNumber`, `carrierCode`, and `labelData`, without a `data` wrapper.
+
+Keep the same key and request across retries. An uncertain outcome needs reconciliation;
+do not start another purchase with a new key. An expired approval returns 409
+`ApprovalExpired`; obtain and explicitly approve a fresh preview when no purchase is
+unresolved. The ceiling bounds postage authorization, not later adjustments or separate
+fees. Sandbox execution bypasses approval; batch, return, and raw carrier routes have
+separate contracts. The SDK never automatically confirms a preview.
 
 ## Authentication
 
@@ -146,17 +176,21 @@ curl -X POST https://gateway.flexops.io/api/shipping/rates \
     "package": {"weight": 16, "weightUnit": "oz"}
   }'
 
-# Create a label
+# Preview a live label; this does not purchase it.
 curl -X POST https://gateway.flexops.io/api/workspaces/ws_abc123/shipping/labels \
   -H "X-API-Key: fxk_live_..." \
   -H "Content-Type: application/json" \
   -d '{
-    "carrier":  "USPS",
-    "service":  "PRIORITY_MAIL",
-    "fromAddress": {"name": "Warehouse", "street1": "123 Main St", "city": "New York", "state": "NY", "zip": "10001", "country": "US"},
-    "toAddress":   {"name": "Customer",  "street1": "456 Oak Ave", "city": "Los Angeles", "state": "CA", "zip": "90210", "country": "US"},
-    "parcel":   {"weight": 16, "weightUnit": "oz"}
+    "carrierCode": "USPS", "serviceCode": "GROUND_ADVANTAGE",
+    "origin": {"name": "Warehouse", "addressLine1": "123 Main St", "city": "New York", "stateProvince": "NY", "postalCode": "10001", "countryCode": "US"},
+    "destination": {"name": "Customer", "addressLine1": "456 Oak Ave", "city": "Los Angeles", "stateProvince": "CA", "postalCode": "90210", "countryCode": "US"},
+    "package": {"weight": 16, "weightUnit": "oz"},
+    "maximumPostageAmount": 10.25
   }'
+
+# After explicit approval, resend the same body with confirmationToken from
+# the preview and an Idempotency-Key header unique to this purchase.
+# See the SDK example above; retain that key for retries.
 
 # Track a shipment
 curl https://gateway.flexops.io/api/workspaces/ws_abc123/shipping/track/9400111899223456789012 \
