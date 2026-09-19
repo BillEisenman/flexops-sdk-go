@@ -11,7 +11,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	flexops "github.com/BillEisenman/flexops-sdk-go"
+	flexops "github.com/BillEisenman/flexops-sdk-go/v2"
 )
 
 // ---------------------------------------------------------------------------

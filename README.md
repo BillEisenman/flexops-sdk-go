@@ -5,7 +5,7 @@ Official Go SDK for the [FlexOps](https://flexops.io) multi-carrier shipping pla
 ## Installation
 
 ```bash
-go get github.com/BillEisenman/flexops-sdk-go
+go get github.com/BillEisenman/flexops-sdk-go/v2
 ```
 
 ## Quick Start
@@ -18,7 +18,7 @@ import (
     "fmt"
     "log"
 
-    flexops "github.com/BillEisenman/flexops-sdk-go"
+    flexops "github.com/BillEisenman/flexops-sdk-go/v2"
 )
 
 func main() {
@@ -69,15 +69,14 @@ func main() {
 }
 ```
 
-### Live label approval (unreleased SDK changes)
+### Live label approval (2.0.0+)
 
 Migration: `CreateLabel` now returns `LabelPurchaseResult`, with purchased fields
 directly on the result instead of under `Data`. Request fields now match Gateway:
 `CarrierCode`, `ServiceCode`, `Origin`, `Destination`, and `Package`.
 
-The example below requires this source revision; the published 1.0.2 packages do
-not include the new per-call idempotency argument. Release these SDK changes before
-using that argument from a package registry.
+The example below requires SDK 2.0.0 or later. Version 1.0.2 does not
+include the per-call idempotency argument.
 
 For live domestic single-label requests, `maximumPostageAmount` is required: positive
 USD, at most two decimal places, up to 1,000,000. Missing or invalid values return
@@ -152,7 +151,7 @@ shipment, err := client.Carriers.DHL.CreateShipment(ctx, flexops.DhlShipmentRequ
 ## Webhook verification
 
 ```go
-import flexops "github.com/BillEisenman/flexops-sdk-go"
+import flexops "github.com/BillEisenman/flexops-sdk-go/v2"
 
 valid := flexops.VerifyWebhookSignature(
     payload,   // []byte of the raw request body

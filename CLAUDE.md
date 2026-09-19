@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-`github.com/BillEisenman/flexops-sdk-go` is the **official hand-crafted Go SDK** for the FlexOps Platform. It targets the FlexOps **Gateway BFF**. Module path `github.com/BillEisenman/flexops-sdk-go`; Go 1.22+. Current tag `v1.0.1`.
+`github.com/BillEisenman/flexops-sdk-go/v2` is the **official hand-crafted Go SDK** for the FlexOps Platform. It targets the FlexOps **Gateway BFF**. Module path `github.com/BillEisenman/flexops-sdk-go/v2`; Go 1.22+. Release series `v2.x`.
 
 > **Gateway-targeted, not VSCS-targeted.** All hand-crafted SDKs in this family (.NET, Node, Python, Go, PHP, Ruby) hit Gateway. The Java SDK is the lone exception — it was auto-generated against VisionSuiteCoreServices and is archived as of 2026-03-08.
 
@@ -51,7 +51,7 @@ Go modules publish on tag push to GitHub — there is no separate registry workf
 
 | Repository | Purpose |
 |---|---|
-| **This repo** | `github.com/BillEisenman/flexops-sdk-go` |
+| **This repo** | `github.com/BillEisenman/flexops-sdk-go/v2` |
 | FlexOps Gateway | The HTTP API this SDK calls — `BillEisenman/FlexOpsGateway` |
 | Sibling SDKs | `FlexOps.Sdk` (.NET), `@flexops/sdk` (Node), `flexops` (Python/Ruby), `flexops/sdk` (PHP) |
 | FlexOps Developer Docs | Hosts the SDK page — `BillEisenman/FlexOpsDeveloperDocs` |
