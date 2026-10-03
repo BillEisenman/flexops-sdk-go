@@ -131,9 +131,6 @@ func (h *httpClient) do(ctx context.Context, method, path string, query url.Valu
 		if resp.StatusCode == 401 {
 			return nil, &AuthError{FlexOpsError{StatusCode: 401, Code: "UNAUTHORIZED", Message: "Authentication required"}}
 		}
-		if resp.StatusCode == 403 {
-			return nil, &FlexOpsError{StatusCode: 403, Code: "FORBIDDEN", Message: "Access denied"}
-		}
 		if resp.StatusCode == 429 {
 			ra, _ := strconv.Atoi(resp.Header.Get("Retry-After"))
 			lastErr = &RateLimitError{FlexOpsError: FlexOpsError{StatusCode: 429, Message: fmt.Sprintf("Rate limited, retry after %ds", ra)}, RetryAfter: ra}
@@ -157,8 +154,14 @@ func (h *httpClient) do(ctx context.Context, method, path string, query url.Valu
 		if msg == "" {
 			msg = fmt.Sprintf("HTTP %d", resp.StatusCode)
 		}
+		if resp.StatusCode == 403 && errBody.Code == "" {
+			errBody.Code = "FORBIDDEN"
+		}
 		apiErr := &FlexOpsError{StatusCode: resp.StatusCode, Code: errBody.Code, Message: msg, Errors: errBody.Errors}
 
+		if resp.StatusCode == 403 {
+			return nil, apiErr
+		}
 		if retryableStatuses[resp.StatusCode] {
 			lastErr = apiErr
 			continue
