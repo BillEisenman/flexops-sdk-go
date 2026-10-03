@@ -128,14 +128,17 @@ type ShippingPackage struct {
 }
 
 type ShippingRate struct {
-	Carrier       string  `json:"carrierCode"`
-	CarrierName   string  `json:"carrierName"`
-	Service       string  `json:"serviceCode"`
-	ServiceName   string  `json:"serviceName"`
-	Rate          float64 `json:"rate"`
-	Currency      string  `json:"currency"`
-	EstimatedDays int     `json:"estimatedDays"`
-	DeliveryDate  string  `json:"deliveryDate,omitempty"`
+	RateIndicator   string  `json:"rateIndicator,omitempty"`
+	UspsMailClass   string  `json:"uspsMailClass,omitempty"`
+	IsInternational bool    `json:"isInternational,omitempty"`
+	Carrier         string  `json:"carrierCode"`
+	CarrierName     string  `json:"carrierName"`
+	Service         string  `json:"serviceCode"`
+	ServiceName     string  `json:"serviceName"`
+	Rate            float64 `json:"rate"`
+	Currency        string  `json:"currency"`
+	EstimatedDays   int     `json:"estimatedDays"`
+	DeliveryDate    string  `json:"deliveryDate,omitempty"`
 }
 
 type RateShoppingResponse struct {
@@ -143,15 +146,44 @@ type RateShoppingResponse struct {
 	Currency string         `json:"currency"`
 }
 
+// CustomsItem value and weightOz describe one unit, not the entire line.
+type CustomsItem struct {
+	Description   string  `json:"description"`
+	Quantity      int     `json:"quantity"`
+	Value         float64 `json:"value"`
+	WeightOz      float64 `json:"weightOz"`
+	HsCode        string  `json:"hsCode,omitempty"`
+	OriginCountry string  `json:"originCountry"`
+}
+type CustomsDeclaration struct {
+	ContentsType        string        `json:"contentsType"`
+	ContentsExplanation string        `json:"contentsExplanation,omitempty"`
+	NonDeliveryOption   string        `json:"nonDeliveryOption"`
+	Currency            string        `json:"currency"`
+	DeclaredValue       float64       `json:"declaredValue"`
+	AesItn              string        `json:"aesItn"`
+	InvoiceNumber       string        `json:"invoiceNumber,omitempty"`
+	LicenseNumber       string        `json:"licenseNumber,omitempty"`
+	CertificateNumber   string        `json:"certificateNumber,omitempty"`
+	RestrictionType     string        `json:"restrictionType,omitempty"`
+	RestrictionComments string        `json:"restrictionComments,omitempty"`
+	Items               []CustomsItem `json:"items"`
+}
+
 type CreateLabelRequest struct {
-	CarrierCode          string          `json:"carrierCode"`
-	ServiceCode          string          `json:"serviceCode"`
-	Origin               ShippingAddress `json:"origin"`
-	Destination          ShippingAddress `json:"destination"`
-	Package              ShippingPackage `json:"package"`
-	MaximumPostageAmount float64         `json:"maximumPostageAmount,omitempty"`
-	ConfirmationToken    string          `json:"confirmationToken,omitempty"`
-	LabelFormat          string          `json:"labelFormat,omitempty"`
+	OrderID              int64               `json:"orderId,omitempty"`
+	ShipDate             string              `json:"shipDate,omitempty"`
+	DeclaredValue        *float64            `json:"declaredValue,omitempty"`
+	CustomsDeclaration   *CustomsDeclaration `json:"customsDeclaration,omitempty"`
+	RateIndicator        string              `json:"rateIndicator,omitempty"`
+	CarrierCode          string              `json:"carrierCode"`
+	ServiceCode          string              `json:"serviceCode"`
+	Origin               ShippingAddress     `json:"origin"`
+	Destination          ShippingAddress     `json:"destination"`
+	Package              ShippingPackage     `json:"package"`
+	MaximumPostageAmount float64             `json:"maximumPostageAmount,omitempty"`
+	ConfirmationToken    string              `json:"confirmationToken,omitempty"`
+	LabelFormat          string              `json:"labelFormat,omitempty"`
 }
 
 // LabelPurchaseResult is the unwrapped Gateway response. Status == "Preview"
