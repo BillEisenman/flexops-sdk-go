@@ -291,16 +291,59 @@ type AddressValidationResult struct {
 	Errors      []string  `json:"errors,omitempty"`
 }
 
+// Deprecated: the Gateway batch route takes orders with package measurements,
+// not label requests. Use CreateBatchLabelRequest with CreateLabelBatch.
 type BatchLabelRequest struct {
 	Items []CreateLabelRequest `json:"items"`
 }
 
+// CreateBatchLabelRequest is the Gateway batch body. Addresses come from each order.
+type CreateBatchLabelRequest struct {
+	Items       []BatchLabelItem `json:"items"`
+	CallbackURL string           `json:"callbackUrl,omitempty"`
+	DryRun      bool             `json:"dryRun,omitempty"`
+}
+
+// BatchLabelItem is one order in a batch (the Gateway BatchLabelItemRequest).
+// Package measurements are in ounces and inches; carrier and service are chosen by
+// shipping rules when omitted.
+type BatchLabelItem struct {
+	OrderID                       int64    `json:"orderId"`
+	OrderNumber                   string   `json:"orderNumber,omitempty"`
+	PackageWeightInOunces         float64  `json:"packageWeightInOunces"`
+	PackageLengthInInches         float64  `json:"packageLengthInInches"`
+	PackageWidthInInches          float64  `json:"packageWidthInInches"`
+	PackageHeightInInches         float64  `json:"packageHeightInInches"`
+	CarrierCode                   string   `json:"carrierCode,omitempty"`
+	ServiceCode                   string   `json:"serviceCode,omitempty"`
+	DeliveryConfirmationRequired  bool     `json:"deliveryConfirmationRequired,omitempty"`
+	SignatureConfirmationRequired bool     `json:"signatureConfirmationRequired,omitempty"`
+	InsuranceCoverageRequested    bool     `json:"insuranceCoverageRequested,omitempty"`
+	InsuredValue                  *float64 `json:"insuredValue,omitempty"`
+	LabelFormat                   string   `json:"labelFormat,omitempty"`
+	ShipDate                      string   `json:"shipDate,omitempty"`
+	// HazmatClassification is what the parcel holds. Sent only when set.
+	HazmatClassification *HazmatClassification `json:"hazmatClassification,omitempty"`
+}
+
 type BatchLabelJob struct {
-	JobID     string `json:"jobId"`
-	Status    string `json:"status"`
-	Total     int    `json:"total"`
-	Completed int    `json:"completed"`
-	Failed    int    `json:"failed"`
+	JobID  string `json:"jobId"`
+	Status string `json:"status"`
+	// Deprecated: the Gateway sends TotalItems.
+	Total int `json:"total"`
+	// Deprecated: the Gateway sends CompletedItems.
+	Completed int `json:"completed"`
+	// Deprecated: the Gateway sends FailedItems.
+	Failed int `json:"failed"`
+	// Fields of the Gateway BatchLabelJobDto.
+	TotalItems         int      `json:"totalItems"`
+	CompletedItems     int      `json:"completedItems"`
+	FailedItems        int      `json:"failedItems"`
+	IsDryRun           bool     `json:"isDryRun"`
+	TotalEstimatedCost *float64 `json:"totalEstimatedCost,omitempty"`
+	CreatedAt          string   `json:"createdAt,omitempty"`
+	CompletedAt        string   `json:"completedAt,omitempty"`
+	StatusURL          string   `json:"statusUrl,omitempty"`
 }
 
 type Order struct {

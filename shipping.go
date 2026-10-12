@@ -87,9 +87,22 @@ func (a ShippingAddress) legacyAddress() Address {
 		State: a.StateProvince, Zip: a.PostalCode, Country: a.CountryCode, Phone: a.Phone}
 }
 
+// CreateLabelBatch queues labels for a batch of orders (the Gateway CreateBatchLabelRequest).
+func (s *ShippingService) CreateLabelBatch(ctx context.Context, req CreateBatchLabelRequest) (ApiResponse[BatchLabelJob], error) {
+	return decode[ApiResponse[BatchLabelJob]](s.c.http.post(ctx, s.c.wsPath("labels/batch"), req))
+}
+
+// PreviewLabelBatch estimates a batch without creating labels.
+func (s *ShippingService) PreviewLabelBatch(ctx context.Context, req CreateBatchLabelRequest) (ApiResponse[BatchLabelJob], error) {
+	return decode[ApiResponse[BatchLabelJob]](s.c.http.post(ctx, s.c.wsPath("labels/batch/preview"), req))
+}
+
+// Deprecated: BatchLabelRequest does not match the Gateway batch body; use CreateLabelBatch.
 func (s *ShippingService) CreateBatch(ctx context.Context, req BatchLabelRequest) (ApiResponse[BatchLabelJob], error) {
 	return decode[ApiResponse[BatchLabelJob]](s.c.http.post(ctx, s.c.wsPath("labels/batch"), req))
 }
+
+// Deprecated: BatchLabelRequest does not match the Gateway batch body; use PreviewLabelBatch.
 func (s *ShippingService) PreviewBatch(ctx context.Context, req BatchLabelRequest) (ApiResponse[BatchLabelJob], error) {
 	return decode[ApiResponse[BatchLabelJob]](s.c.http.post(ctx, s.c.wsPath("labels/batch/preview"), req))
 }
