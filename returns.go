@@ -14,5 +14,11 @@ func (s *ReturnsService) Approve(ctx context.Context, returnID string) (ApiRespo
 func (s *ReturnsService) Reject(ctx context.Context, returnID, reason string) (ApiResponse[ReturnAuthorization], error) { return decode[ApiResponse[ReturnAuthorization]](s.c.http.post(ctx, s.c.wsPath("returns/"+returnID+"/reject"), map[string]string{"reason": reason})) }
 func (s *ReturnsService) Cancel(ctx context.Context, returnID string) error { _, err := s.c.http.post(ctx, s.c.wsPath("returns/"+returnID+"/cancel"), nil); return err }
 func (s *ReturnsService) GenerateLabel(ctx context.Context, returnID string) (ApiResponse[any], error) { return decode[ApiResponse[any]](s.c.http.post(ctx, s.c.wsPath("returns/"+returnID+"/label"), nil)) }
+
+// GenerateLabelWithOptions generates a return label with optional fields such as a
+// declared HAZMAT class. Unset fields are not sent.
+func (s *ReturnsService) GenerateLabelWithOptions(ctx context.Context, returnID string, opts ReturnLabelOptions) (ApiResponse[any], error) {
+	return decode[ApiResponse[any]](s.c.http.post(ctx, s.c.wsPath("returns/"+returnID+"/label"), opts))
+}
 func (s *ReturnsService) MarkReceived(ctx context.Context, returnID string, items any) (ApiResponse[any], error) { return decode[ApiResponse[any]](s.c.http.post(ctx, s.c.wsPath("returns/"+returnID+"/receive"), map[string]any{"items": items})) }
 func (s *ReturnsService) ProcessRefund(ctx context.Context, returnID string) (ApiResponse[any], error) { return decode[ApiResponse[any]](s.c.http.post(ctx, s.c.wsPath("returns/"+returnID+"/refund"), nil)) }

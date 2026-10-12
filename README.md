@@ -46,6 +46,8 @@ func main() {
         Destination: flexops.ShippingAddress{Name: "Customer", AddressLine1: "456 Oak Ave", City: "Los Angeles", StateProvince: "CA", PostalCode: "90210", CountryCode: "US"},
         Package: flexops.ShippingPackage{Weight: 16, WeightUnit: "oz"},
         MaximumPostageAmount: 10.25, // Caller-approved ceiling in USD.
+        // Required without an OrderID. The SDK never fills it in; HazmatNone (0) = not hazardous.
+        HazmatClassification: flexops.HazmatNone.Ptr(),
     }
     preview, err := client.Shipping.CreateLabel(ctx, request)
     if err != nil { log.Fatal(err) }
@@ -176,7 +178,8 @@ curl -X POST https://gateway.flexops.io/api/shipping/rates \
   }'
 
 # Preview a live label; this does not purchase it.
-curl -X POST https://gateway.flexops.io/api/workspaces/ws_abc123/shipping/labels \
+# hazmatClassification 0 = not hazardous; required when there is no orderId.
+curl -X POST https://gateway.flexops.io/api/shipping/labels \
   -H "X-API-Key: fxk_live_..." \
   -H "Content-Type: application/json" \
   -d '{
@@ -184,7 +187,8 @@ curl -X POST https://gateway.flexops.io/api/workspaces/ws_abc123/shipping/labels
     "origin": {"name": "Warehouse", "addressLine1": "123 Main St", "city": "New York", "stateProvince": "NY", "postalCode": "10001", "countryCode": "US"},
     "destination": {"name": "Customer", "addressLine1": "456 Oak Ave", "city": "Los Angeles", "stateProvince": "CA", "postalCode": "90210", "countryCode": "US"},
     "package": {"weight": 16, "weightUnit": "oz"},
-    "maximumPostageAmount": 10.25
+    "maximumPostageAmount": 10.25,
+    "hazmatClassification": 0
   }'
 
 # After explicit approval, resend the same body with confirmationToken from

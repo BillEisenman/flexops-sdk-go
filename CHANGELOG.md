@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `HazmatClassification` (`HazmatNone` = 0 ... `HazmatLithiumBatteryUsedDevice` = 6, the Gateway numbers) and an optional `*HazmatClassification` on `CreateLabelRequest` (also batch items) and `RateRequest`. It is sent only when set; the SDK never defaults it. Labels without an `OrderID` must declare it (`flexops.HazmatNone.Ptr()` for an ordinary parcel).
+- `Returns.GenerateLabelWithOptions` sends a declared HAZMAT class with a return label.
+- `Shipping.ValidateShippingAddress` returns the Gateway `AddressValidationResponse`. `ShippingAddress` gains optional `Company`, `Phone` and `Email`.
+
+### Fixed
+- `Shipping.CreateLabel` posts to the Gateway route `/api/shipping/labels`; it used a workspace-scoped path the Gateway does not serve.
+- `Shipping.ValidateAddress` (now deprecated) posts the Gateway `{"address": {...}}` request to `/api/shipping/addresses/validate`, mapping the legacy `Address` to the Gateway field names and the response back.
+
 ## [2.0.0] - 2026-09-19
 
 ### Bounded label purchase support

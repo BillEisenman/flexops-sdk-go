@@ -28,7 +28,7 @@ func (s *ShippingService) CreateLabel(ctx context.Context, req CreateLabelReques
 	if len(idempotencyKey) == 1 {
 		headers.Set("Idempotency-Key", idempotencyKey[0])
 	}
-	return decode[LabelPurchaseResult](s.c.http.do(ctx, http.MethodPost, s.c.wsPath("shipping/labels"), nil, req, headers))
+	return decode[LabelPurchaseResult](s.c.http.do(ctx, http.MethodPost, "/api/shipping/labels", nil, req, headers))
 }
 func (s *ShippingService) CancelLabel(ctx context.Context, labelID string) error {
 	_, err := s.c.http.del(ctx, s.c.wsPath("shipping/labels/"+labelID))
@@ -37,9 +37,44 @@ func (s *ShippingService) CancelLabel(ctx context.Context, labelID string) error
 func (s *ShippingService) Track(ctx context.Context, trackingNumber string) (ApiResponse[TrackingInfo], error) {
 	return decode[ApiResponse[TrackingInfo]](s.c.http.get(ctx, s.c.wsPath("shipping/track/"+trackingNumber), nil))
 }
-func (s *ShippingService) ValidateAddress(ctx context.Context, address Address) (ApiResponse[AddressValidationResult], error) {
-	return decode[ApiResponse[AddressValidationResult]](s.c.http.post(ctx, s.c.wsPath("shipping/addresses/validate"), address))
+
+// ValidateShippingAddress validates and corrects an address. It sends the Gateway
+// AddressValidationRequest ({"address": {...}}) and returns the Gateway response.
+func (s *ShippingService) ValidateShippingAddress(ctx context.Context, address ShippingAddress) (AddressValidationResponse, error) {
+	return decode[AddressValidationResponse](s.c.http.post(ctx, "/api/shipping/addresses/validate", AddressValidationRequest{Address: address}))
 }
+
+// ValidateAddress validates a legacy Address.
+//
+// Deprecated: use ValidateShippingAddress. The address is mapped to the Gateway
+// field names; the validated address and suggestions are mapped back, and the
+// Gateway messages are returned as Errors.
+func (s *ShippingService) ValidateAddress(ctx context.Context, address Address) (ApiResponse[AddressValidationResult], error) {
+	response, err := s.ValidateShippingAddress(ctx, address.shippingAddress())
+	if err != nil {
+		return ApiResponse[AddressValidationResult]{}, err
+	}
+	result := AddressValidationResult{IsValid: response.IsValid, Errors: response.Messages}
+	if response.ValidatedAddress != nil {
+		normalized := response.ValidatedAddress.legacyAddress()
+		result.Normalized = &normalized
+	}
+	for _, suggestion := range response.Suggestions {
+		result.Suggestions = append(result.Suggestions, suggestion.legacyAddress())
+	}
+	return ApiResponse[AddressValidationResult]{Success: true, Data: result}, nil
+}
+
+func (a Address) shippingAddress() ShippingAddress {
+	return ShippingAddress{Name: a.Name, AddressLine1: a.Street1, AddressLine2: a.Street2, City: a.City,
+		StateProvince: a.State, PostalCode: a.Zip, CountryCode: a.Country, Phone: a.Phone}
+}
+
+func (a ShippingAddress) legacyAddress() Address {
+	return Address{Name: a.Name, Street1: a.AddressLine1, Street2: a.AddressLine2, City: a.City,
+		State: a.StateProvince, Zip: a.PostalCode, Country: a.CountryCode, Phone: a.Phone}
+}
+
 func (s *ShippingService) CreateBatch(ctx context.Context, req BatchLabelRequest) (ApiResponse[BatchLabelJob], error) {
 	return decode[ApiResponse[BatchLabelJob]](s.c.http.post(ctx, s.c.wsPath("labels/batch"), req))
 }

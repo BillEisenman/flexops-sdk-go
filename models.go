@@ -87,6 +87,9 @@ type RateRequest struct {
 	Destination ShippingAddress `json:"destination"`
 	Package     ShippingPackage `json:"package"`
 	Carriers    []string        `json:"carriers,omitempty"`
+	// HazmatClassification is the declared HAZMAT class, so quotes match what the
+	// label route will accept. Sent only when set.
+	HazmatClassification *HazmatClassification `json:"hazmatClassification,omitempty"`
 	// Deprecated: use Origin, Destination, and Package.
 	FromZip string `json:"fromZip,omitempty"`
 	// Deprecated: use Origin, Destination, and Package.
@@ -109,13 +112,35 @@ type RateRequest struct {
 
 type ShippingAddress struct {
 	Name          string `json:"name,omitempty"`
+	Company       string `json:"company,omitempty"`
 	AddressLine1  string `json:"addressLine1"`
 	AddressLine2  string `json:"addressLine2,omitempty"`
 	City          string `json:"city"`
 	StateProvince string `json:"stateProvince"`
 	PostalCode    string `json:"postalCode"`
 	CountryCode   string `json:"countryCode,omitempty"`
+	Phone         string `json:"phone,omitempty"`
+	Email         string `json:"email,omitempty"`
 }
+
+// HazmatClassification is the USPS HAZMAT class, sent as the Gateway
+// HazmatClassification number. There is no default: leave the request field nil
+// when you have no answer, or send HazmatNone (0) to declare that the parcel holds
+// no dangerous goods.
+type HazmatClassification int
+
+const (
+	HazmatNone                               HazmatClassification = 0
+	HazmatLimitedQuantity                    HazmatClassification = 1
+	HazmatLithiumBatteryContainedInEquipment HazmatClassification = 2
+	HazmatLithiumBatteryPackedWithEquipment  HazmatClassification = 3
+	HazmatLithiumBatteryStandalone           HazmatClassification = 4
+	HazmatOtherRestricted                    HazmatClassification = 5
+	HazmatLithiumBatteryUsedDevice           HazmatClassification = 6
+)
+
+// Ptr returns a pointer to c for the optional HazmatClassification request fields.
+func (c HazmatClassification) Ptr() *HazmatClassification { return &c }
 
 type ShippingPackage struct {
 	Weight            float64 `json:"weight"`
@@ -184,6 +209,16 @@ type CreateLabelRequest struct {
 	MaximumPostageAmount float64             `json:"maximumPostageAmount,omitempty"`
 	ConfirmationToken    string              `json:"confirmationToken,omitempty"`
 	LabelFormat          string              `json:"labelFormat,omitempty"`
+	// HazmatClassification is the declared HAZMAT class. A label without an
+	// OrderID must declare one (HazmatNone.Ptr() for an ordinary parcel). Sent only
+	// when set; the SDK never fills it in.
+	HazmatClassification *HazmatClassification `json:"hazmatClassification,omitempty"`
+}
+
+// ReturnLabelOptions are the optional fields of a return-label request.
+type ReturnLabelOptions struct {
+	// HazmatClassification is what the return holds. Sent only when set.
+	HazmatClassification *HazmatClassification `json:"hazmatClassification,omitempty"`
 }
 
 // LabelPurchaseResult is the unwrapped Gateway response. Status == "Preview"
@@ -224,6 +259,25 @@ type TrackingInfo struct {
 	Events            []TrackingEvent `json:"events"`
 }
 
+// AddressValidationRequest is the Gateway address-validation body.
+type AddressValidationRequest struct {
+	Address ShippingAddress `json:"address"`
+}
+
+// AddressValidationResponse is the Gateway address-validation result.
+type AddressValidationResponse struct {
+	ValidationUnavailable bool              `json:"validationUnavailable"`
+	IsValid               bool              `json:"isValid"`
+	ConfidenceScore       float64           `json:"confidenceScore"`
+	ValidatedAddress      *ShippingAddress  `json:"validatedAddress,omitempty"`
+	IsResidential         *bool             `json:"isResidential,omitempty"`
+	AddressClassification string            `json:"addressClassification,omitempty"`
+	Provider              string            `json:"provider"`
+	Messages              []string          `json:"messages,omitempty"`
+	Suggestions           []ShippingAddress `json:"suggestions,omitempty"`
+}
+
+// Deprecated: returned by the deprecated ValidateAddress; use AddressValidationResponse.
 type AddressValidationResult struct {
 	IsValid     bool      `json:"isValid"`
 	Normalized  *Address  `json:"normalized,omitempty"`
