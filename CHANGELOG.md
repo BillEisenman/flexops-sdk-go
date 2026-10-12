@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - `HazmatClassification` (`HazmatNone` = 0 ... `HazmatLithiumBatteryUsedDevice` = 6, the Gateway numbers) and an optional `*HazmatClassification` on `CreateLabelRequest` (also batch items) and `RateRequest`. It is sent only when set; the SDK never defaults it. Labels without an `OrderID` must declare it (`flexops.HazmatNone.Ptr()` for an ordinary parcel).
 - `Returns.GenerateLabelWithOptions` sends a declared HAZMAT class with a return label.
+- `ReturnLabelOptions` gains `WeightOz`, `LengthIn`, `WidthIn`, `HeightIn`, `CarrierCode`, `ServiceType` and `PaymentConfirmed`. The Gateway needs the package: a workspace with no default shipping preset gets a 400 (`PackageMeasurementsRequired`) naming the missing fields when they are left out (Gateway #672).
 - `Shipping.CreateLabelBatch` and `PreviewLabelBatch` take the new `CreateBatchLabelRequest` / `BatchLabelItem`, which match the Gateway batch body. `CreateBatch`, `PreviewBatch` and `BatchLabelRequest` are deprecated (they never matched). `BatchLabelJob` gains the Gateway job fields (`TotalItems`, `CompletedItems`, `FailedItems`, ...); `TrackingInfo` gains the Gateway tracking fields (`CarrierCode`, `EstimatedDeliveryDate`, ...).
 - `Shipping.ValidateShippingAddress` returns the Gateway `AddressValidationResponse`. `ShippingAddress` gains optional `Company`, `Phone` and `Email`.
 

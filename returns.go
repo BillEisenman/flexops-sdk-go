@@ -14,12 +14,15 @@ func (s *ReturnsService) Approve(ctx context.Context, returnID string) (ApiRespo
 func (s *ReturnsService) Reject(ctx context.Context, returnID, reason string) (ApiResponse[ReturnAuthorization], error) { return decode[ApiResponse[ReturnAuthorization]](s.c.http.post(ctx, s.c.wsPath("returns/"+returnID+"/reject"), map[string]string{"reason": reason})) }
 func (s *ReturnsService) Cancel(ctx context.Context, returnID string) error { _, err := s.c.http.post(ctx, s.c.wsPath("returns/"+returnID+"/cancel"), nil); return err }
 // GenerateLabel sends {}: the Gateway binds a required GenerateReturnLabelRequest body and refuses an empty one with 400.
+// An empty body carries no package, so it only works for a workspace with a default shipping preset; otherwise the
+// Gateway answers 400 PackageMeasurementsRequired. Prefer GenerateLabelWithOptions and send the weight and size.
 func (s *ReturnsService) GenerateLabel(ctx context.Context, returnID string) (ApiResponse[any], error) {
 	return s.GenerateLabelWithOptions(ctx, returnID, ReturnLabelOptions{})
 }
 
-// GenerateLabelWithOptions generates a return label with optional fields such as a
-// declared HAZMAT class. Unset fields are not sent.
+// GenerateLabelWithOptions generates a return label with the package weight and size
+// (WeightOz, LengthIn, WidthIn, HeightIn) and optional fields such as a declared HAZMAT
+// class. Unset fields are not sent.
 func (s *ReturnsService) GenerateLabelWithOptions(ctx context.Context, returnID string, opts ReturnLabelOptions) (ApiResponse[any], error) {
 	return decode[ApiResponse[any]](s.c.http.post(ctx, s.c.wsPath("returns/"+returnID+"/label"), opts))
 }

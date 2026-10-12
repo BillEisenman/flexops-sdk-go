@@ -107,6 +107,33 @@ func TestHazmatClassification_RatesSentOnlyWhenSet(t *testing.T) {
 	}
 }
 
+// FlexOpsGateway#672: the package weight and size reach the return-label wire as the Gateway's fields.
+func TestReturnLabel_SendsPackageWeightAndSize(t *testing.T) {
+	client, calls := recordingClient(t, map[string]any{"success": true})
+	ctx := context.Background()
+
+	if _, err := client.Returns.GenerateLabelWithOptions(ctx, "RMA-1", flexops.ReturnLabelOptions{
+		WeightOz: 16, LengthIn: 10, WidthIn: 8, HeightIn: 4,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	body := (*calls)[0].body
+	if (*calls)[0].path != "/api/workspaces/ws-test-123/returns/RMA-1/label" {
+		t.Errorf("posted to %s", (*calls)[0].path)
+	}
+	for field, want := range map[string]float64{"weightOz": 16, "lengthIn": 10, "widthIn": 8, "heightIn": 4} {
+		if got, ok := body[field].(float64); !ok || got != want {
+			t.Errorf("%s = %v, want %v (body %v)", field, body[field], want, body)
+		}
+	}
+	for _, unset := range []string{"carrierCode", "serviceType", "paymentConfirmed", "hazmatClassification"} {
+		if _, present := body[unset]; present {
+			t.Errorf("%s was sent although unset (body %v)", unset, body)
+		}
+	}
+}
+
 func TestHazmatClassification_BatchItemsAndReturnLabels(t *testing.T) {
 	client, calls := recordingClient(t, map[string]any{"success": true})
 	ctx := context.Background()
