@@ -132,8 +132,9 @@ func TestHazmatClassification_BatchItemsAndReturnLabels(t *testing.T) {
 	if got := sentHazmat(t, items[1].(map[string]any)); got != "absent" {
 		t.Errorf("batch item without a declaration sent %v", got)
 	}
-	if (*calls)[1].body != nil {
-		t.Errorf("GenerateLabel sent a body: %v", (*calls)[1].body)
+	// The Gateway binds a required GenerateReturnLabelRequest body; {} takes its defaults.
+	if (*calls)[1].body == nil || len((*calls)[1].body) != 0 {
+		t.Errorf("GenerateLabel must send {}, sent %v", (*calls)[1].body)
 	}
 	if (*calls)[2].path != "/api/workspaces/ws-test-123/returns/RMA-1/label" || sentHazmat(t, (*calls)[2].body) != 0.0 {
 		t.Errorf("return label with HAZMAT sent %s %v", (*calls)[2].path, (*calls)[2].body)
