@@ -469,10 +469,10 @@ type CarrierRecommendationResponse struct {
 
 type DeliveryPredictionRequest struct {
 	CarrierCode           string `json:"carrierCode"`
-	ServiceCode           string `json:"serviceCode"`
+	ServiceCode           string `json:"serviceCode,omitempty"`
 	OriginPostalCode      string `json:"originPostalCode"`
 	DestinationPostalCode string `json:"destinationPostalCode"`
-	ShipDate              string `json:"shipDate"`
+	ShipDate              string `json:"shipDate,omitempty"`
 }
 
 type DeliveryPredictionResponse struct {

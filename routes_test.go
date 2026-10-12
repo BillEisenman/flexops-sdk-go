@@ -81,6 +81,20 @@ func TestShipping_CancelLabelNeedsCarrierCode(t *testing.T) {
 	}
 }
 
+func TestShipping_PredictDeliveryOmitsUnsetOptionalFields(t *testing.T) {
+	var body map[string]any
+	client, calls := recordingClient(t, map[string]any{"carrierCode": "USPS"})
+	if _, err := client.Shipping.PredictDelivery(context.Background(), flexops.DeliveryPredictionRequest{CarrierCode: "USPS", OriginPostalCode: "80202", DestinationPostalCode: "10001"}); err != nil {
+		t.Fatal(err)
+	}
+	body = (*calls)[0].body
+	for _, field := range []string{"shipDate", "serviceCode"} {
+		if _, ok := body[field]; ok {
+			t.Errorf("sent unset %s: %v (the Gateway binds shipDate as DateTime?, so \"\" is refused)", field, body)
+		}
+	}
+}
+
 func query(r *http.Request) string {
 	if r.URL.RawQuery == "" {
 		return ""
