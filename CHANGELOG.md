@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `HazmatClassification` (`HazmatNone` = 0 ... `HazmatLithiumBatteryUsedDevice` = 6, the Gateway numbers) and an optional `*HazmatClassification` on `CreateLabelRequest` (also batch items) and `RateRequest`. It is sent only when set; the SDK never defaults it. Labels without an `OrderID` must declare it (`flexops.HazmatNone.Ptr()` for an ordinary parcel).
+- `Returns.GenerateLabelWithOptions` sends a declared HAZMAT class with a return label.
+- `Shipping.CreateLabelBatch` and `PreviewLabelBatch` take the new `CreateBatchLabelRequest` / `BatchLabelItem`, which match the Gateway batch body. `CreateBatch`, `PreviewBatch` and `BatchLabelRequest` are deprecated (they never matched). `BatchLabelJob` gains the Gateway job fields (`TotalItems`, `CompletedItems`, `FailedItems`, ...); `TrackingInfo` gains the Gateway tracking fields (`CarrierCode`, `EstimatedDeliveryDate`, ...).
+- `Shipping.ValidateShippingAddress` returns the Gateway `AddressValidationResponse`. `ShippingAddress` gains optional `Company`, `Phone` and `Email`.
+
+### Fixed
+- `Returns.GenerateLabel` sends `{}`; it sent no body, which the Gateway return-label route refuses with 400.
+- `Shipping.CreateLabel` posts to the Gateway route `/api/shipping/labels`; it used a workspace-scoped path the Gateway does not serve.
+- `Shipping.Track`, `CancelLabel`, `GetCarriers`, `GetRecommendations`, `PredictDelivery` and `GetSavings` use the Gateway `/api/shipping/...` routes instead of workspace-scoped paths the Gateway does not serve, and wrap its raw responses in `ApiResponse` as before. `CancelLabel(ctx, labelID, carrierCode)` takes the carrier code the Gateway requires (variadic, so existing calls compile; without it the call returns an error before any request).
+- `DeliveryPredictionRequest` omits an unset `ShipDate` and `ServiceCode`; an empty `shipDate` failed Gateway model binding.
+- Zip-only rate requests (deprecated `FromZip`/`ToZip` without full addresses) return a `*FlexOpsError` with `Code` `UnsupportedRequestShape` before any request; the Gateway needs full addresses.
+- `Shipping.ValidateAddress` (now deprecated) posts the Gateway `{"address": {...}}` request to `/api/shipping/addresses/validate`, mapping the legacy `Address` to the Gateway field names and the response back.
+
 ## [2.0.0] - 2026-09-19
 
 ### Bounded label purchase support

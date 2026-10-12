@@ -87,6 +87,9 @@ type RateRequest struct {
 	Destination ShippingAddress `json:"destination"`
 	Package     ShippingPackage `json:"package"`
 	Carriers    []string        `json:"carriers,omitempty"`
+	// HazmatClassification is the declared HAZMAT class, so quotes match what the
+	// label route will accept. Sent only when set.
+	HazmatClassification *HazmatClassification `json:"hazmatClassification,omitempty"`
 	// Deprecated: use Origin, Destination, and Package.
 	FromZip string `json:"fromZip,omitempty"`
 	// Deprecated: use Origin, Destination, and Package.
@@ -109,13 +112,35 @@ type RateRequest struct {
 
 type ShippingAddress struct {
 	Name          string `json:"name,omitempty"`
+	Company       string `json:"company,omitempty"`
 	AddressLine1  string `json:"addressLine1"`
 	AddressLine2  string `json:"addressLine2,omitempty"`
 	City          string `json:"city"`
 	StateProvince string `json:"stateProvince"`
 	PostalCode    string `json:"postalCode"`
 	CountryCode   string `json:"countryCode,omitempty"`
+	Phone         string `json:"phone,omitempty"`
+	Email         string `json:"email,omitempty"`
 }
+
+// HazmatClassification is the USPS HAZMAT class, sent as the Gateway
+// HazmatClassification number. There is no default: leave the request field nil
+// when you have no answer, or send HazmatNone (0) to declare that the parcel holds
+// no dangerous goods.
+type HazmatClassification int
+
+const (
+	HazmatNone                               HazmatClassification = 0
+	HazmatLimitedQuantity                    HazmatClassification = 1
+	HazmatLithiumBatteryContainedInEquipment HazmatClassification = 2
+	HazmatLithiumBatteryPackedWithEquipment  HazmatClassification = 3
+	HazmatLithiumBatteryStandalone           HazmatClassification = 4
+	HazmatOtherRestricted                    HazmatClassification = 5
+	HazmatLithiumBatteryUsedDevice           HazmatClassification = 6
+)
+
+// Ptr returns a pointer to c for the optional HazmatClassification request fields.
+func (c HazmatClassification) Ptr() *HazmatClassification { return &c }
 
 type ShippingPackage struct {
 	Weight            float64 `json:"weight"`
@@ -184,6 +209,16 @@ type CreateLabelRequest struct {
 	MaximumPostageAmount float64             `json:"maximumPostageAmount,omitempty"`
 	ConfirmationToken    string              `json:"confirmationToken,omitempty"`
 	LabelFormat          string              `json:"labelFormat,omitempty"`
+	// HazmatClassification is the declared HAZMAT class. A label without an
+	// OrderID must declare one (HazmatNone.Ptr() for an ordinary parcel). Sent only
+	// when set; the SDK never fills it in.
+	HazmatClassification *HazmatClassification `json:"hazmatClassification,omitempty"`
+}
+
+// ReturnLabelOptions are the optional fields of a return-label request.
+type ReturnLabelOptions struct {
+	// HazmatClassification is what the return holds. Sent only when set.
+	HazmatClassification *HazmatClassification `json:"hazmatClassification,omitempty"`
 }
 
 // LabelPurchaseResult is the unwrapped Gateway response. Status == "Preview"
@@ -222,8 +257,33 @@ type TrackingInfo struct {
 	StatusDetail      string          `json:"statusDetail"`
 	EstimatedDelivery string          `json:"estimatedDelivery,omitempty"`
 	Events            []TrackingEvent `json:"events"`
+	// Fields of the Gateway tracking result (api/shipping/track).
+	CarrierCode           string `json:"carrierCode,omitempty"`
+	Description           string `json:"description,omitempty"`
+	Location              string `json:"location,omitempty"`
+	EventDate             string `json:"eventDate,omitempty"`
+	EstimatedDeliveryDate string `json:"estimatedDeliveryDate,omitempty"`
 }
 
+// AddressValidationRequest is the Gateway address-validation body.
+type AddressValidationRequest struct {
+	Address ShippingAddress `json:"address"`
+}
+
+// AddressValidationResponse is the Gateway address-validation result.
+type AddressValidationResponse struct {
+	ValidationUnavailable bool              `json:"validationUnavailable"`
+	IsValid               bool              `json:"isValid"`
+	ConfidenceScore       float64           `json:"confidenceScore"`
+	ValidatedAddress      *ShippingAddress  `json:"validatedAddress,omitempty"`
+	IsResidential         *bool             `json:"isResidential,omitempty"`
+	AddressClassification string            `json:"addressClassification,omitempty"`
+	Provider              string            `json:"provider"`
+	Messages              []string          `json:"messages,omitempty"`
+	Suggestions           []ShippingAddress `json:"suggestions,omitempty"`
+}
+
+// Deprecated: returned by the deprecated ValidateAddress; use AddressValidationResponse.
 type AddressValidationResult struct {
 	IsValid     bool      `json:"isValid"`
 	Normalized  *Address  `json:"normalized,omitempty"`
@@ -231,16 +291,59 @@ type AddressValidationResult struct {
 	Errors      []string  `json:"errors,omitempty"`
 }
 
+// Deprecated: the Gateway batch route takes orders with package measurements,
+// not label requests. Use CreateBatchLabelRequest with CreateLabelBatch.
 type BatchLabelRequest struct {
 	Items []CreateLabelRequest `json:"items"`
 }
 
+// CreateBatchLabelRequest is the Gateway batch body. Addresses come from each order.
+type CreateBatchLabelRequest struct {
+	Items       []BatchLabelItem `json:"items"`
+	CallbackURL string           `json:"callbackUrl,omitempty"`
+	DryRun      bool             `json:"dryRun,omitempty"`
+}
+
+// BatchLabelItem is one order in a batch (the Gateway BatchLabelItemRequest).
+// Package measurements are in ounces and inches; carrier and service are chosen by
+// shipping rules when omitted.
+type BatchLabelItem struct {
+	OrderID                       int64    `json:"orderId"`
+	OrderNumber                   string   `json:"orderNumber,omitempty"`
+	PackageWeightInOunces         float64  `json:"packageWeightInOunces"`
+	PackageLengthInInches         float64  `json:"packageLengthInInches"`
+	PackageWidthInInches          float64  `json:"packageWidthInInches"`
+	PackageHeightInInches         float64  `json:"packageHeightInInches"`
+	CarrierCode                   string   `json:"carrierCode,omitempty"`
+	ServiceCode                   string   `json:"serviceCode,omitempty"`
+	DeliveryConfirmationRequired  bool     `json:"deliveryConfirmationRequired,omitempty"`
+	SignatureConfirmationRequired bool     `json:"signatureConfirmationRequired,omitempty"`
+	InsuranceCoverageRequested    bool     `json:"insuranceCoverageRequested,omitempty"`
+	InsuredValue                  *float64 `json:"insuredValue,omitempty"`
+	LabelFormat                   string   `json:"labelFormat,omitempty"`
+	ShipDate                      string   `json:"shipDate,omitempty"`
+	// HazmatClassification is what the parcel holds. Sent only when set.
+	HazmatClassification *HazmatClassification `json:"hazmatClassification,omitempty"`
+}
+
 type BatchLabelJob struct {
-	JobID     string `json:"jobId"`
-	Status    string `json:"status"`
-	Total     int    `json:"total"`
-	Completed int    `json:"completed"`
-	Failed    int    `json:"failed"`
+	JobID  string `json:"jobId"`
+	Status string `json:"status"`
+	// Deprecated: the Gateway sends TotalItems.
+	Total int `json:"total"`
+	// Deprecated: the Gateway sends CompletedItems.
+	Completed int `json:"completed"`
+	// Deprecated: the Gateway sends FailedItems.
+	Failed int `json:"failed"`
+	// Fields of the Gateway BatchLabelJobDto.
+	TotalItems         int      `json:"totalItems"`
+	CompletedItems     int      `json:"completedItems"`
+	FailedItems        int      `json:"failedItems"`
+	IsDryRun           bool     `json:"isDryRun"`
+	TotalEstimatedCost *float64 `json:"totalEstimatedCost,omitempty"`
+	CreatedAt          string   `json:"createdAt,omitempty"`
+	CompletedAt        string   `json:"completedAt,omitempty"`
+	StatusURL          string   `json:"statusUrl,omitempty"`
 }
 
 type Order struct {
@@ -409,10 +512,10 @@ type CarrierRecommendationResponse struct {
 
 type DeliveryPredictionRequest struct {
 	CarrierCode           string `json:"carrierCode"`
-	ServiceCode           string `json:"serviceCode"`
+	ServiceCode           string `json:"serviceCode,omitempty"`
 	OriginPostalCode      string `json:"originPostalCode"`
 	DestinationPostalCode string `json:"destinationPostalCode"`
-	ShipDate              string `json:"shipDate"`
+	ShipDate              string `json:"shipDate,omitempty"`
 }
 
 type DeliveryPredictionResponse struct {

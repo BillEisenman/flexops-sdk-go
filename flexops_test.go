@@ -268,7 +268,7 @@ func TestShipping_Track(t *testing.T) {
 		},
 	}
 	client, _ := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, 200, map[string]any{"success": true, "data": info})
+		writeJSON(w, 200, info) // The Gateway returns the tracking DTO without an envelope.
 	}))
 
 	resp, err := client.Shipping.Track(context.Background(), "1Z999AA10123456784")
@@ -396,7 +396,7 @@ func TestShipping_GetRecommendations(t *testing.T) {
 		},
 	}
 	client, _ := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, 200, map[string]any{"success": true, "data": resp})
+		writeJSON(w, 200, resp) // The Gateway returns the recommendation DTO without an envelope.
 	}))
 
 	result, err := client.Shipping.GetRecommendations(context.Background(), flexops.CarrierRecommendationRequest{
