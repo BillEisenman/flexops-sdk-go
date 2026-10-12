@@ -215,8 +215,28 @@ type CreateLabelRequest struct {
 	HazmatClassification *HazmatClassification `json:"hazmatClassification,omitempty"`
 }
 
-// ReturnLabelOptions are the optional fields of a return-label request.
+// ReturnLabelOptions are the fields of a return-label request.
+//
+// The carrier needs the package weight and all three dimensions. Set WeightOz,
+// LengthIn, WidthIn and HeightIn; any you leave out come from the workspace's
+// default shipping preset. With no preset the Gateway refuses the call with a 400
+// (code PackageMeasurementsRequired) that names the missing fields.
 type ReturnLabelOptions struct {
+	// CarrierCode defaults to "usps" on the Gateway (the only carrier supported).
+	CarrierCode string `json:"carrierCode,omitempty"`
+	// ServiceType is the carrier service for the return label.
+	ServiceType string `json:"serviceType,omitempty"`
+	// WeightOz is the package weight in ounces.
+	WeightOz float64 `json:"weightOz,omitempty"`
+	// LengthIn is the package length in inches.
+	LengthIn float64 `json:"lengthIn,omitempty"`
+	// WidthIn is the package width in inches.
+	WidthIn float64 `json:"widthIn,omitempty"`
+	// HeightIn is the package height in inches.
+	HeightIn float64 `json:"heightIn,omitempty"`
+	// PaymentConfirmed is set when the workspace return-cost policy is CustomerPays
+	// and the customer has paid.
+	PaymentConfirmed bool `json:"paymentConfirmed,omitempty"`
 	// HazmatClassification is what the return holds. Sent only when set.
 	HazmatClassification *HazmatClassification `json:"hazmatClassification,omitempty"`
 }
