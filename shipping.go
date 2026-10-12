@@ -10,13 +10,33 @@ import (
 type ShippingService struct{ c *Client }
 
 func (s *ShippingService) GetRates(ctx context.Context, req RateRequest) (RateShoppingResponse, error) {
+	if err := refuseZipOnly(req); err != nil {
+		return RateShoppingResponse{}, err
+	}
 	return decode[RateShoppingResponse](s.c.http.post(ctx, "/api/shipping/rates", req))
 }
 func (s *ShippingService) GetCheapestRate(ctx context.Context, req RateRequest) (ShippingRate, error) {
+	if err := refuseZipOnly(req); err != nil {
+		return ShippingRate{}, err
+	}
 	return decode[ShippingRate](s.c.http.post(ctx, "/api/shipping/rates/cheapest", req))
 }
 func (s *ShippingService) GetFastestRate(ctx context.Context, req RateRequest) (ShippingRate, error) {
+	if err := refuseZipOnly(req); err != nil {
+		return ShippingRate{}, err
+	}
 	return decode[ShippingRate](s.c.http.post(ctx, "/api/shipping/rates/fastest", req))
+}
+
+// refuseZipOnly rejects a request that uses the deprecated FromZip/ToZip fields
+// without full addresses: the Gateway requires Origin and Destination, so it would
+// only fail there. It returns a *FlexOpsError with Code "UnsupportedRequestShape".
+func refuseZipOnly(req RateRequest) error {
+	if (req.FromZip != "" || req.ToZip != "") && (req.Origin.AddressLine1 == "" || req.Destination.AddressLine1 == "") {
+		return &FlexOpsError{StatusCode: 400, Code: "UnsupportedRequestShape",
+			Message: "The Gateway needs full origin and destination addresses. Use Origin, Destination and Package."}
+	}
+	return nil
 }
 
 // CreateLabel previews unless ConfirmationToken is supplied. For a purchase,
