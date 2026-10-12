@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"net/url"
 )
 
 type ShippingService struct{ c *Client }
@@ -30,12 +31,23 @@ func (s *ShippingService) CreateLabel(ctx context.Context, req CreateLabelReques
 	}
 	return decode[LabelPurchaseResult](s.c.http.do(ctx, http.MethodPost, "/api/shipping/labels", nil, req, headers))
 }
-func (s *ShippingService) CancelLabel(ctx context.Context, labelID string) error {
-	_, err := s.c.http.del(ctx, s.c.wsPath("shipping/labels/"+labelID))
+
+// CancelLabel voids a label. The Gateway requires the carrier code (for example
+// "USPS"); it is variadic only so existing call sites still compile, and a call
+// without it returns an error before any request.
+func (s *ShippingService) CancelLabel(ctx context.Context, labelID string, carrierCode ...string) error {
+	if len(carrierCode) != 1 || carrierCode[0] == "" {
+		return fmt.Errorf("flexops: CancelLabel needs exactly one carrier code (for example \"USPS\")")
+	}
+	_, err := s.c.http.do(ctx, http.MethodDelete, "/api/shipping/labels/"+url.PathEscape(labelID),
+		url.Values{"carrierCode": {carrierCode[0]}}, nil)
 	return err
 }
+
+// Track returns the Gateway tracking result. The Gateway sends it without an
+// envelope; the SDK wraps it in ApiResponse to keep this method's signature.
 func (s *ShippingService) Track(ctx context.Context, trackingNumber string) (ApiResponse[TrackingInfo], error) {
-	return decode[ApiResponse[TrackingInfo]](s.c.http.get(ctx, s.c.wsPath("shipping/track/"+trackingNumber), nil))
+	return wrap[TrackingInfo](s.c.http.get(ctx, "/api/shipping/track/"+url.PathEscape(trackingNumber), nil))
 }
 
 // ValidateShippingAddress validates and corrects an address. It sends the Gateway
@@ -88,14 +100,24 @@ func (s *ShippingService) DownloadBatchLabel(ctx context.Context, jobID, itemID 
 	return s.c.http.get(ctx, s.c.wsPath("labels/batch/"+jobID+"/items/"+itemID+"/label"), nil)
 }
 func (s *ShippingService) GetCarriers(ctx context.Context) (ApiResponse[any], error) {
-	return decode[ApiResponse[any]](s.c.http.get(ctx, s.c.wsPath("shipping/carriers"), nil))
+	return wrap[any](s.c.http.get(ctx, "/api/shipping/carriers", nil))
 }
 func (s *ShippingService) GetRecommendations(ctx context.Context, req CarrierRecommendationRequest) (ApiResponse[CarrierRecommendationResponse], error) {
-	return decode[ApiResponse[CarrierRecommendationResponse]](s.c.http.post(ctx, s.c.wsPath("shipping/recommendations"), req))
+	return wrap[CarrierRecommendationResponse](s.c.http.post(ctx, "/api/shipping/recommendations", req))
 }
 func (s *ShippingService) PredictDelivery(ctx context.Context, req DeliveryPredictionRequest) (ApiResponse[DeliveryPredictionResponse], error) {
-	return decode[ApiResponse[DeliveryPredictionResponse]](s.c.http.post(ctx, s.c.wsPath("shipping/predictions/delivery"), req))
+	return wrap[DeliveryPredictionResponse](s.c.http.post(ctx, "/api/shipping/predictions/delivery", req))
 }
 func (s *ShippingService) GetSavings(ctx context.Context) (ApiResponse[any], error) {
-	return decode[ApiResponse[any]](s.c.http.get(ctx, s.c.wsPath("shipping/savings"), nil))
+	return wrap[any](s.c.http.get(ctx, "/api/shipping/savings", nil))
+}
+
+// wrap decodes a raw Gateway api/shipping response and wraps it in ApiResponse,
+// the shape these methods have always returned.
+func wrap[T any](data []byte, err error) (ApiResponse[T], error) {
+	value, err := decode[T](data, err)
+	if err != nil {
+		return ApiResponse[T]{}, err
+	}
+	return ApiResponse[T]{Success: true, Data: value}, nil
 }

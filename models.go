@@ -257,6 +257,12 @@ type TrackingInfo struct {
 	StatusDetail      string          `json:"statusDetail"`
 	EstimatedDelivery string          `json:"estimatedDelivery,omitempty"`
 	Events            []TrackingEvent `json:"events"`
+	// Fields of the Gateway tracking result (api/shipping/track).
+	CarrierCode           string `json:"carrierCode,omitempty"`
+	Description           string `json:"description,omitempty"`
+	Location              string `json:"location,omitempty"`
+	EventDate             string `json:"eventDate,omitempty"`
+	EstimatedDeliveryDate string `json:"estimatedDeliveryDate,omitempty"`
 }
 
 // AddressValidationRequest is the Gateway address-validation body.
