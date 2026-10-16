@@ -1,10 +1,15 @@
 package flexops_test
 
 import (
+	"context"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
+	"io"
+	"net/http"
+	"reflect"
 	"strconv"
 	"strings"
 	"testing"
@@ -117,5 +122,154 @@ func TestVerifyWebhookSignature_ToleranceBoundary(t *testing.T) {
 	if err := verifyAt(vectorNow.Add(10*time.Minute), vectorBody, vectorSignature, vectorTimestamp, vectorSecret,
 		flexops.WithWebhookTolerance(0)); !errors.Is(err, flexops.ErrWebhookTimestampOutsideTolerance) {
 		t.Errorf("expected a non-positive tolerance to fall back to the default, got %v", err)
+	}
+}
+
+// capturedRequest records one request the test server received.
+type capturedRequest struct {
+	method, path string
+	body         map[string]any
+}
+
+// webhookServer answers like the Gateway WebhookSubscriptionsController: create
+// returns the raw WebhookSubscriptionCreatedDto with 201, update an ApiResponse.
+func webhookServer(t *testing.T) (*flexops.Client, *[]capturedRequest) {
+	t.Helper()
+	var seen []capturedRequest
+	client, _ := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw, _ := io.ReadAll(r.Body)
+		var body map[string]any
+		if len(raw) > 0 {
+			if err := json.Unmarshal(raw, &body); err != nil {
+				t.Errorf("request body is not JSON: %s", raw)
+			}
+		}
+		seen = append(seen, capturedRequest{r.Method, r.URL.Path, body})
+		subscription := map[string]any{
+			"id": "0b6f2d4e-0000-0000-0000-000000000001", "url": "https://example.com/hook", "description": nil,
+			"eventTypes": "LabelCreated,BatchCompleted", "status": "Active", "consecutiveFailures": 0,
+			"createdAt": "2026-10-16T12:00:00Z", "updatedAt": nil,
+		}
+		if r.Method == http.MethodPost {
+			subscription["secret"] = "whsec_test"
+			writeJSON(w, http.StatusCreated, subscription)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"success": true, "data": subscription})
+	}))
+	return client, &seen
+}
+
+func TestWebhookEventTypes_AreTheNamesTheGatewaySends(t *testing.T) {
+	got := []flexops.WebhookEventType{
+		flexops.WebhookEventLabelCreated, flexops.WebhookEventLabelCanceled, flexops.WebhookEventBatchCompleted,
+		flexops.WebhookEventTrackingUpdated, flexops.WebhookEventTrackingDelivered,
+	}
+	want := []flexops.WebhookEventType{"LabelCreated", "LabelCanceled", "BatchCompleted", "TrackingUpdated", "TrackingDelivered"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("event names = %v, want %v", got, want)
+	}
+}
+
+// The Gateway reads a comma-separated eventTypes (no spaces) and ignores an
+// events field, so an events array subscribed to every event.
+func TestWebhooksCreate_SendsEventTypes(t *testing.T) {
+	client, seen := webhookServer(t)
+
+	res, err := client.Webhooks.Create(context.Background(), flexops.CreateWebhookRequest{
+		URL:    "https://example.com/hook",
+		Events: []flexops.WebhookEventType{flexops.WebhookEventLabelCreated, flexops.WebhookEventBatchCompleted, flexops.WebhookEventLabelCreated},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(*seen) != 1 || (*seen)[0].method != http.MethodPost || (*seen)[0].path != "/api/workspaces/ws-test-123/webhooks" {
+		t.Fatalf("requests = %+v", *seen)
+	}
+	want := map[string]any{"url": "https://example.com/hook", "eventTypes": "LabelCreated,BatchCompleted"}
+	if !reflect.DeepEqual((*seen)[0].body, want) {
+		t.Fatalf("body = %v, want %v", (*seen)[0].body, want)
+	}
+	// Create returns the subscription without an envelope; the secret comes back only here.
+	sub := res.Data
+	if !res.Success || sub.ID == "" || sub.Secret != "whsec_test" || sub.EventTypes != "LabelCreated,BatchCompleted" || sub.Status != "Active" || sub.CreatedAt == "" {
+		t.Fatalf("result = %+v", res)
+	}
+}
+
+func TestWebhooksCreate_WithoutEventsReceivesEveryEvent(t *testing.T) {
+	client, seen := webhookServer(t)
+
+	if _, err := client.Webhooks.Create(context.Background(), flexops.CreateWebhookRequest{URL: "https://example.com/hook", Description: "orders"}); err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]any{"url": "https://example.com/hook", "description": "orders"}
+	if len(*seen) != 1 || !reflect.DeepEqual((*seen)[0].body, want) {
+		t.Fatalf("requests = %+v, want body %v", *seen, want)
+	}
+}
+
+func TestWebhooksUpdate_SendsEventTypes(t *testing.T) {
+	client, seen := webhookServer(t)
+
+	res, err := client.Webhooks.Update(context.Background(), "wh-001", flexops.UpdateWebhookRequest{
+		Events: []flexops.WebhookEventType{flexops.WebhookEventLabelCanceled},
+		Status: "Active",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(*seen) != 1 || (*seen)[0].method != http.MethodPut || (*seen)[0].path != "/api/workspaces/ws-test-123/webhooks/wh-001" {
+		t.Fatalf("requests = %+v", *seen)
+	}
+	want := map[string]any{"eventTypes": "LabelCanceled", "status": "Active"}
+	if !reflect.DeepEqual((*seen)[0].body, want) {
+		t.Fatalf("body = %v, want %v", (*seen)[0].body, want)
+	}
+	if res.Data.EventTypes == "" || res.Data.Status != "Active" {
+		t.Fatalf("result = %+v", res)
+	}
+}
+
+func TestWebhooksUpdate_ClearsDescription(t *testing.T) {
+	client, seen := webhookServer(t)
+	empty := ""
+
+	if _, err := client.Webhooks.Update(context.Background(), "wh-001", flexops.UpdateWebhookRequest{Description: &empty}); err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]any{"description": ""}
+	if len(*seen) != 1 || !reflect.DeepEqual((*seen)[0].body, want) {
+		t.Fatalf("requests = %+v, want body %v", *seen, want)
+	}
+}
+
+func TestWebhooks_RefuseEventsFlexOpsNeverSends(t *testing.T) {
+	cases := map[string][]flexops.WebhookEventType{
+		"dotted name":           {"label.created"},
+		"enum name never sent":  {flexops.WebhookEventLabelCreated, "ShipmentCreated"},
+		"wrong case":            {"labelcreated"},
+		"space after comma":     {" LabelCanceled"},
+		"empty non-nil list":    {},
+		"comma inside one name": {"LabelCreated,LabelCanceled"},
+	}
+	for name, events := range cases {
+		t.Run(name, func(t *testing.T) {
+			client, seen := webhookServer(t)
+			ctx := context.Background()
+
+			_, createErr := client.Webhooks.Create(ctx, flexops.CreateWebhookRequest{URL: "https://example.com/hook", Events: events})
+			_, updateErr := client.Webhooks.Update(ctx, "wh-001", flexops.UpdateWebhookRequest{Events: events})
+
+			for _, err := range []error{createErr, updateErr} {
+				var apiErr *flexops.FlexOpsError
+				if !errors.As(err, &apiErr) || apiErr.Code != "UnknownWebhookEvent" {
+					t.Errorf("expected an UnknownWebhookEvent error, got %v", err)
+				}
+			}
+			if len(*seen) != 0 {
+				t.Errorf("expected no request, got %+v", *seen)
+			}
+		})
 	}
 }
