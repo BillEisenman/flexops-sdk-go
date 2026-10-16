@@ -5,6 +5,7 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"slices"
 	"strconv"
@@ -20,7 +21,8 @@ func (s *WebhooksService) Get(ctx context.Context, webhookID string) (ApiRespons
 // Create creates a webhook subscription. req.Events is sent as the Gateway's
 // comma-separated eventTypes; leave it nil to receive every event. The result's
 // Data.Secret is the signing secret, returned only here. The Gateway sends the
-// new subscription without an envelope; the SDK wraps it in ApiResponse.
+// new subscription without an envelope; the SDK wraps it in ApiResponse (an
+// enveloped body is read as is).
 //
 // It returns a *FlexOpsError with Code "UnknownWebhookEvent", before any request,
 // when req.Events is empty but non-nil or names an event FlexOps does not send.
@@ -34,7 +36,26 @@ func (s *WebhooksService) Create(ctx context.Context, req CreateWebhookRequest) 
 		Description string `json:"description,omitempty"`
 		EventTypes  string `json:"eventTypes,omitempty"`
 	}{req.URL, req.Description, eventTypes}
-	return wrap[WebhookSubscription](s.c.http.post(ctx, s.c.wsPath("webhooks"), body))
+	return decodeCreatedWebhook(s.c.http.post(ctx, s.c.wsPath("webhooks"), body))
+}
+
+// decodeCreatedWebhook reads a create response. The Gateway answers 201 with the
+// bare subscription (and its secret), not the ApiResponse envelope; an enveloped
+// body ({"success":...,"data":...}) is read too, so the secret is never lost.
+func decodeCreatedWebhook(data []byte, err error) (ApiResponse[WebhookSubscription], error) {
+	if err != nil {
+		return ApiResponse[WebhookSubscription]{}, err
+	}
+	var probe map[string]json.RawMessage
+	if err := json.Unmarshal(data, &probe); err != nil {
+		return ApiResponse[WebhookSubscription]{}, err
+	}
+	_, hasSuccess := probe["success"]
+	_, hasData := probe["data"]
+	if hasSuccess && hasData {
+		return decode[ApiResponse[WebhookSubscription]](data, nil)
+	}
+	return wrap[WebhookSubscription](data, nil)
 }
 
 // Update changes a webhook subscription. req.Events, when non-nil, replaces the

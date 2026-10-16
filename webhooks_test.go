@@ -197,6 +197,38 @@ func TestWebhooksCreate_SendsEventTypes(t *testing.T) {
 	}
 }
 
+// The Gateway answers a create with 201 and the bare subscription; an enveloped
+// body must be read too. Either way the secret, shown only once, must survive.
+func TestWebhooksCreate_ReadsBareAndEnvelopedResponses(t *testing.T) {
+	const subscription = `{"id":"0b6f2d4e-0000-0000-0000-000000000001","url":"https://example.com/hook","description":"orders",` +
+		`"eventTypes":"LabelCanceled","status":"Active","consecutiveFailures":0,"createdAt":"2026-10-16T12:00:00Z","updatedAt":null,"secret":"whsec_test"}`
+	cases := map[string]string{
+		"bare":      subscription,
+		"enveloped": `{"success":true,"data":` + subscription + `,"message":null,"errors":null}`,
+	}
+	for name, body := range cases {
+		t.Run(name, func(t *testing.T) {
+			client, _ := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusCreated)
+				_, _ = io.WriteString(w, body)
+			}))
+
+			res, err := client.Webhooks.Create(context.Background(), flexops.CreateWebhookRequest{
+				URL: "https://example.com/hook", Events: []flexops.WebhookEventType{flexops.WebhookEventLabelCanceled},
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			sub := res.Data
+			if !res.Success || sub.Secret != "whsec_test" || sub.ID != "0b6f2d4e-0000-0000-0000-000000000001" ||
+				sub.EventTypes != "LabelCanceled" || sub.Description != "orders" || sub.Status != "Active" {
+				t.Fatalf("result = %+v", res)
+			}
+		})
+	}
+}
+
 func TestWebhooksCreate_WithoutEventsReceivesEveryEvent(t *testing.T) {
 	client, seen := webhookServer(t)
 
