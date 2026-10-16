@@ -2,9 +2,6 @@ package flexops_test
 
 import (
 	"context"
-	"crypto/hmac"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -34,12 +31,6 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(v)
-}
-
-func computeHMAC(payload, secret string) string {
-	mac := hmac.New(sha256.New, []byte(secret))
-	mac.Write([]byte(payload))
-	return hex.EncodeToString(mac.Sum(nil))
 }
 
 func rateRequest() flexops.RateRequest {
@@ -113,44 +104,8 @@ func TestClient_SetAccessToken(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// 4. Webhook signature verification — valid
+// 4-6. Webhook signature verification: see webhooks_test.go
 // ---------------------------------------------------------------------------
-
-func TestVerifySignature_Valid(t *testing.T) {
-	payload := `{"event":"label.created","labelId":"lbl_123"}`
-	secret := "whsec_test_secret"
-	sig := computeHMAC(payload, secret)
-
-	if !flexops.VerifySignature(payload, sig, secret) {
-		t.Error("expected VerifySignature to return true for valid signature")
-	}
-}
-
-// ---------------------------------------------------------------------------
-// 5. Webhook signature verification — wrong signature
-// ---------------------------------------------------------------------------
-
-func TestVerifySignature_InvalidSignature(t *testing.T) {
-	payload := `{"event":"label.created"}`
-	secret := "whsec_test_secret"
-
-	if flexops.VerifySignature(payload, "deadbeef", secret) {
-		t.Error("expected VerifySignature to return false for wrong signature")
-	}
-}
-
-// ---------------------------------------------------------------------------
-// 6. Webhook signature verification — wrong secret
-// ---------------------------------------------------------------------------
-
-func TestVerifySignature_WrongSecret(t *testing.T) {
-	payload := `{"event":"label.created"}`
-	sig := computeHMAC(payload, "correct_secret")
-
-	if flexops.VerifySignature(payload, sig, "wrong_secret") {
-		t.Error("expected VerifySignature to return false for wrong secret")
-	}
-}
 
 // ---------------------------------------------------------------------------
 // 7. Shipping — GetRates parses response
