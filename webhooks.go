@@ -5,7 +5,9 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -15,11 +17,112 @@ type WebhooksService struct{ c *Client }
 
 func (s *WebhooksService) List(ctx context.Context) (ApiResponse[[]WebhookSubscription], error) { return decode[ApiResponse[[]WebhookSubscription]](s.c.http.get(ctx, s.c.wsPath("webhooks"), nil)) }
 func (s *WebhooksService) Get(ctx context.Context, webhookID string) (ApiResponse[WebhookSubscription], error) { return decode[ApiResponse[WebhookSubscription]](s.c.http.get(ctx, s.c.wsPath("webhooks/"+webhookID), nil)) }
-func (s *WebhooksService) Create(ctx context.Context, req CreateWebhookRequest) (ApiResponse[WebhookSubscription], error) { return decode[ApiResponse[WebhookSubscription]](s.c.http.post(ctx, s.c.wsPath("webhooks"), req)) }
-func (s *WebhooksService) Update(ctx context.Context, webhookID string, data any) (ApiResponse[WebhookSubscription], error) { return decode[ApiResponse[WebhookSubscription]](s.c.http.put(ctx, s.c.wsPath("webhooks/"+webhookID), data)) }
+
+// Create creates a webhook subscription. req.Events is sent as the Gateway's
+// comma-separated eventTypes; leave it nil to receive every event. The result's
+// Data.Secret is the signing secret, returned only here. The Gateway sends the
+// new subscription without an envelope; the SDK wraps it in ApiResponse (an
+// enveloped body is read as is).
+//
+// It returns a *FlexOpsError with Code "UnknownWebhookEvent", before any request,
+// when req.Events is empty but non-nil or names an event FlexOps does not send.
+func (s *WebhooksService) Create(ctx context.Context, req CreateWebhookRequest) (ApiResponse[WebhookSubscription], error) {
+	eventTypes, err := webhookEventTypes(req.Events)
+	if err != nil {
+		return ApiResponse[WebhookSubscription]{}, err
+	}
+	body := struct {
+		URL         string `json:"url"`
+		Description string `json:"description,omitempty"`
+		EventTypes  string `json:"eventTypes,omitempty"`
+	}{req.URL, req.Description, eventTypes}
+	return decodeCreatedWebhook(s.c.http.post(ctx, s.c.wsPath("webhooks"), body))
+}
+
+// decodeCreatedWebhook reads a create response. The Gateway answers 201 with the
+// bare subscription (and its secret), not the ApiResponse envelope; an enveloped
+// body ({"success":...,"data":...}) is read too, so the secret is never lost.
+func decodeCreatedWebhook(data []byte, err error) (ApiResponse[WebhookSubscription], error) {
+	if err != nil {
+		return ApiResponse[WebhookSubscription]{}, err
+	}
+	var probe map[string]json.RawMessage
+	if err := json.Unmarshal(data, &probe); err != nil {
+		return ApiResponse[WebhookSubscription]{}, err
+	}
+	_, hasSuccess := probe["success"]
+	_, hasData := probe["data"]
+	if hasSuccess && hasData {
+		return decode[ApiResponse[WebhookSubscription]](data, nil)
+	}
+	return wrap[WebhookSubscription](data, nil)
+}
+
+// Update changes a webhook subscription. req.Events, when non-nil, replaces the
+// subscribed events and is sent as the Gateway's comma-separated eventTypes.
+//
+// It returns a *FlexOpsError with Code "UnknownWebhookEvent", before any request,
+// when req.Events is empty but non-nil or names an event FlexOps does not send.
+func (s *WebhooksService) Update(ctx context.Context, webhookID string, req UpdateWebhookRequest) (ApiResponse[WebhookSubscription], error) {
+	eventTypes, err := webhookEventTypes(req.Events)
+	if err != nil {
+		return ApiResponse[WebhookSubscription]{}, err
+	}
+	body := struct {
+		URL         string  `json:"url,omitempty"`
+		Description *string `json:"description,omitempty"`
+		EventTypes  string  `json:"eventTypes,omitempty"`
+		Status      string  `json:"status,omitempty"`
+	}{req.URL, req.Description, eventTypes, req.Status}
+	return decode[ApiResponse[WebhookSubscription]](s.c.http.put(ctx, s.c.wsPath("webhooks/"+webhookID), body))
+}
+
 func (s *WebhooksService) Delete(ctx context.Context, webhookID string) error { _, err := s.c.http.del(ctx, s.c.wsPath("webhooks/"+webhookID)); return err }
 func (s *WebhooksService) RotateSecret(ctx context.Context, webhookID string) (ApiResponse[map[string]string], error) { return decode[ApiResponse[map[string]string]](s.c.http.post(ctx, s.c.wsPath("webhooks/"+webhookID+"/rotate-secret"), nil)) }
 func (s *WebhooksService) ListDeliveryLogs(ctx context.Context, webhookID string) (ApiResponse[[]any], error) { return decode[ApiResponse[[]any]](s.c.http.get(ctx, s.c.wsPath("webhooks/"+webhookID+"/deliveries"), nil)) }
+
+var knownWebhookEvents = []WebhookEventType{
+	WebhookEventLabelCreated,
+	WebhookEventLabelCanceled,
+	WebhookEventBatchCompleted,
+	WebhookEventTrackingUpdated,
+	WebhookEventTrackingDelivered,
+}
+
+// webhookEventTypes joins events into the Gateway's comma-separated eventTypes,
+// with no spaces and no duplicates. A nil slice returns "", which the request
+// omits. The Gateway ignores an events field (subscribing to every event) and
+// matches each name exactly, so a name it never sends would leave the
+// subscription silent; it is refused here instead.
+func webhookEventTypes(events []WebhookEventType) (string, error) {
+	if events == nil {
+		return "", nil
+	}
+	if len(events) == 0 {
+		return "", &FlexOpsError{StatusCode: 400, Code: "UnknownWebhookEvent",
+			Message: "Events must name at least one event; leave it nil to receive every event."}
+	}
+	names := make([]string, 0, len(events))
+	var unknown []string
+	for _, event := range events {
+		if !slices.Contains(knownWebhookEvents, event) {
+			unknown = append(unknown, strconv.Quote(string(event)))
+			continue
+		}
+		if !slices.Contains(names, string(event)) {
+			names = append(names, string(event))
+		}
+	}
+	if len(unknown) > 0 {
+		known := make([]string, len(knownWebhookEvents))
+		for i, event := range knownWebhookEvents {
+			known[i] = string(event)
+		}
+		return "", &FlexOpsError{StatusCode: 400, Code: "UnknownWebhookEvent",
+			Message: "Unknown webhook event: " + strings.Join(unknown, ", ") + ". FlexOps sends " + strings.Join(known, ", ") + "."}
+	}
+	return strings.Join(names, ","), nil
+}
 
 // Headers FlexOps sends with every webhook delivery.
 const (

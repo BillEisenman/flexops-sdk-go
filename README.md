@@ -150,6 +150,41 @@ info, err := client.Carriers.UPS.Track(ctx, "1Z999AA10123456784")
 shipment, err := client.Carriers.DHL.CreateShipment(ctx, flexops.DhlShipmentRequest{...})
 ```
 
+## Webhook subscriptions
+
+```go
+// Leave Events nil to receive every event.
+webhook, err := client.Webhooks.Create(ctx, flexops.CreateWebhookRequest{
+    URL: "https://your-app.com/webhooks/flexops",
+    Events: []flexops.WebhookEventType{
+        flexops.WebhookEventLabelCreated,
+        flexops.WebhookEventLabelCanceled,
+        flexops.WebhookEventBatchCompleted,
+    },
+})
+if err != nil {
+    log.Fatal(err)
+}
+signingSecret := webhook.Data.Secret // returned only by Create; store it
+
+// Change the events later. Unset fields are left as they are.
+_, err = client.Webhooks.Update(ctx, webhook.Data.ID, flexops.UpdateWebhookRequest{
+    Events: []flexops.WebhookEventType{flexops.WebhookEventLabelCreated},
+})
+```
+
+FlexOps sends these events, named exactly as below. Names are PascalCase and matched exactly, so a name like `label.created` would never match. `Create` and `Update` return a `*flexops.FlexOpsError` with `Code` `"UnknownWebhookEvent"`, without calling the API, for an unknown name or an empty (non-nil) `Events`.
+
+| Event | Constant | Sent when |
+|---|---|---|
+| `LabelCreated` | `WebhookEventLabelCreated` | A live label is purchased (sandbox labels send nothing) |
+| `LabelCanceled` | `WebhookEventLabelCanceled` | A live label is voided |
+| `BatchCompleted` | `WebhookEventBatchCompleted` | A batch label job finishes |
+| `TrackingUpdated` | `WebhookEventTrackingUpdated` | A USPS tracking scan arrives (USPS push-tracking pilot workspaces only) |
+| `TrackingDelivered` | `WebhookEventTrackingDelivered` | A USPS package is delivered (USPS push-tracking pilot workspaces only) |
+
+A subscription's `EventTypes` is the comma-separated list it receives, or `"*"` for every event.
+
 ## Webhook verification
 
 FlexOps signs each delivery with HMAC-SHA256 over `{X-FlexOps-Timestamp}.{raw body}`, keyed with your subscription secret (`whsec_...`, used as-is), and sends it as `X-FlexOps-Signature: sha256=<hex>`. Verify the raw body before you decode it.
@@ -188,7 +223,7 @@ func webhookHandler(w http.ResponseWriter, r *http.Request) {
     switch r.Header.Get(flexops.WebhookEventHeader) {
     case "test":
         // body: {"type":"test","message":"...","timestamp":"...","subscriptionId":"..."}
-    case "TrackingUpdated":
+    case string(flexops.WebhookEventTrackingUpdated):
         var data map[string]any
         _ = json.Unmarshal(body, &data)
         // handle data["trackingNumber"], data["status"], ...

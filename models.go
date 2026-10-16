@@ -380,16 +380,58 @@ type OrderItem struct {
 	Price    float64 `json:"price"`
 }
 
+// WebhookEventType is an event name FlexOps sends in the X-FlexOps-Event header
+// and matches subscriptions against. Names are PascalCase and matched exactly: a
+// dotted name such as "label.created" matches nothing.
+type WebhookEventType string
+
+// The events FlexOps sends. WebhookEventTrackingUpdated and
+// WebhookEventTrackingDelivered are sent only to workspaces in the USPS
+// push-tracking pilot.
+const (
+	WebhookEventLabelCreated      WebhookEventType = "LabelCreated"
+	WebhookEventLabelCanceled     WebhookEventType = "LabelCanceled"
+	WebhookEventBatchCompleted    WebhookEventType = "BatchCompleted"
+	WebhookEventTrackingUpdated   WebhookEventType = "TrackingUpdated"
+	WebhookEventTrackingDelivered WebhookEventType = "TrackingDelivered"
+)
+
+// WebhookSubscription is a webhook subscription as the Gateway returns it.
 type WebhookSubscription struct {
-	ID       string   `json:"id"`
-	URL      string   `json:"url"`
-	Events   []string `json:"events"`
-	IsActive bool     `json:"isActive"`
+	ID          string `json:"id"`
+	URL         string `json:"url"`
+	Description string `json:"description,omitempty"`
+	// EventTypes is the subscribed event names, comma-separated, or "*" for every event.
+	EventTypes string `json:"eventTypes"`
+	// Status is "Active", "Paused" or "Disabled".
+	Status              string `json:"status"`
+	ConsecutiveFailures int    `json:"consecutiveFailures"`
+	CreatedAt           string `json:"createdAt"`
+	UpdatedAt           string `json:"updatedAt,omitempty"`
+	// Secret is the "whsec_..." signing secret. It is returned only by Create; store it.
+	Secret string `json:"secret,omitempty"`
 }
 
+// CreateWebhookRequest creates a webhook subscription.
 type CreateWebhookRequest struct {
-	URL    string   `json:"url"`
-	Events []string `json:"events"`
+	URL         string `json:"url"`
+	Description string `json:"description,omitempty"`
+	// Events lists the events to receive. Leave it nil to receive every event; an
+	// empty, non-nil slice is refused. It is sent as the Gateway's comma-separated
+	// eventTypes.
+	Events []WebhookEventType `json:"-"`
+}
+
+// UpdateWebhookRequest changes a webhook subscription. Unset fields are left as they are.
+type UpdateWebhookRequest struct {
+	URL string `json:"url,omitempty"`
+	// Description replaces the description when set; a pointer to "" clears it.
+	Description *string `json:"description,omitempty"`
+	// Events replaces the subscribed events when non-nil; an empty, non-nil slice
+	// is refused. It is sent as the Gateway's comma-separated eventTypes.
+	Events []WebhookEventType `json:"-"`
+	// Status is "Active", "Paused" or "Disabled".
+	Status string `json:"status,omitempty"`
 }
 
 type WalletBalance struct {
