@@ -152,15 +152,52 @@ shipment, err := client.Carriers.DHL.CreateShipment(ctx, flexops.DhlShipmentRequ
 
 ## Webhook verification
 
-```go
-import flexops "github.com/BillEisenman/flexops-sdk-go/v2"
+FlexOps signs each delivery with HMAC-SHA256 over `{X-FlexOps-Timestamp}.{raw body}`, keyed with your subscription secret (`whsec_...`, used as-is), and sends it as `X-FlexOps-Signature: sha256=<hex>`. Verify the raw body before you decode it.
 
-valid := flexops.VerifyWebhookSignature(
-    payload,   // []byte of the raw request body
-    signature, // value of the X-FlexOps-Signature header
-    "whsec_...",
+```go
+import (
+    "encoding/json"
+    "io"
+    "net/http"
+    "os"
+
+    flexops "github.com/BillEisenman/flexops-sdk-go/v2"
 )
+
+func webhookHandler(w http.ResponseWriter, r *http.Request) {
+    body, err := io.ReadAll(r.Body)
+    if err != nil {
+        http.Error(w, "bad request", http.StatusBadRequest)
+        return
+    }
+
+    err = flexops.VerifyWebhookSignature(
+        body,
+        r.Header.Get(flexops.WebhookSignatureHeader), // "sha256=..."
+        r.Header.Get(flexops.WebhookTimestampHeader), // Unix seconds
+        os.Getenv("FLEXOPS_WEBHOOK_SECRET"),          // "whsec_..."
+    )
+    if err != nil {
+        // errors.Is(err, flexops.ErrWebhookTimestampOutsideTolerance), ErrWebhookSignatureMismatch, ...
+        http.Error(w, "invalid signature", http.StatusUnauthorized)
+        return
+    }
+
+    // The body is the event data itself (no type/data envelope).
+    // The event name is in a header; test events send "test".
+    switch r.Header.Get(flexops.WebhookEventHeader) {
+    case "test":
+        // body: {"type":"test","message":"...","timestamp":"...","subscriptionId":"..."}
+    case "TrackingUpdated":
+        var data map[string]any
+        _ = json.Unmarshal(body, &data)
+        // handle data["trackingNumber"], data["status"], ...
+    }
+    w.WriteHeader(http.StatusOK)
+}
 ```
+
+Deliveries whose timestamp is more than 5 minutes from your clock (either way) are rejected to limit replays; pass `flexops.WithWebhookTolerance(d)` to change that. `flexops.VerifySignature(body, signature, timestamp, secret)` returns a `bool` with the default tolerance.
 
 ## Curl quickstart
 
