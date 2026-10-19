@@ -15,7 +15,7 @@ import (
 	"testing"
 	"time"
 
-	flexops "github.com/BillEisenman/flexops-sdk-go/v2"
+	flexops "github.com/BillEisenman/flexops-sdk-go/v3"
 )
 
 // Fixed vector computed outside this SDK with the Gateway algorithm

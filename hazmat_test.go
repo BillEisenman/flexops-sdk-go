@@ -7,12 +7,15 @@ import (
 	"net/http"
 	"testing"
 
-	flexops "github.com/BillEisenman/flexops-sdk-go/v2"
+	flexops "github.com/BillEisenman/flexops-sdk-go/v3"
 )
 
 type recordedCall struct {
-	path string
-	body map[string]any
+	method string
+	path   string
+	query  string // "?..." or ""
+	header http.Header
+	body   map[string]any
 }
 
 func recordingClient(t *testing.T, response map[string]any) (*flexops.Client, *[]recordedCall) {
@@ -20,7 +23,7 @@ func recordingClient(t *testing.T, response map[string]any) (*flexops.Client, *[
 	calls := &[]recordedCall{}
 	client, _ := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		raw, _ := io.ReadAll(r.Body)
-		call := recordedCall{path: r.URL.Path}
+		call := recordedCall{method: r.Method, path: r.URL.Path, query: query(r), header: r.Header.Clone()}
 		if len(raw) > 0 {
 			if err := json.Unmarshal(raw, &call.body); err != nil {
 				t.Fatalf("body is not a JSON object: %s", raw)
@@ -171,35 +174,25 @@ func TestHazmatClassification_BatchItemsAndReturnLabels(t *testing.T) {
 	}
 }
 
+// Address validation uses the documented POST /api/addresses/validate with the flat
+// Gateway body; the hidden /api/shipping/addresses/validate is not called.
 func TestShipping_ValidateAddressSendsGatewayRequest(t *testing.T) {
 	client, calls := recordingClient(t, map[string]any{
-		"isValid": true, "provider": "USPS", "messages": []string{"Corrected ZIP+4"},
-		"validatedAddress": map[string]any{"addressLine1": "123 MAIN ST", "city": "NEW YORK", "stateProvince": "NY", "postalCode": "10001-1234", "countryCode": "US"},
+		"isValid": true, "validatedBy": "USPS", "warnings": []string{"Corrected ZIP+4"}, "isResidential": true,
+		"suggestedAddress": map[string]any{"line1": "123 MAIN ST", "city": "NEW YORK", "state": "NY", "postalCode": "10001-1234", "country": "US"},
 	})
-	ctx := context.Background()
-	canonical := flexops.ShippingAddress{AddressLine1: "123 Main St", City: "New York", StateProvince: "NY", PostalCode: "10001", CountryCode: "US"}
-
-	response, err := client.Shipping.ValidateShippingAddress(ctx, canonical)
-	if err != nil || !response.IsValid || response.ValidatedAddress == nil || response.ValidatedAddress.PostalCode != "10001-1234" {
+	response, err := client.Shipping.ValidateAddress(context.Background(), flexops.AddressValidationRequest{
+		Line1: "123 Main St", City: "New York", State: "NY", PostalCode: "10001"})
+	if err != nil || !response.IsValid || response.SuggestedAddress == nil || response.SuggestedAddress.PostalCode != "10001-1234" ||
+		response.ValidatedBy != "USPS" || len(response.Warnings) != 1 || response.IsResidential == nil || !*response.IsResidential {
 		t.Fatalf("bad response: %+v %v", response, err)
 	}
-	legacy, err := client.Shipping.ValidateAddress(ctx, flexops.Address{Name: "J", Street1: "123 Main St", City: "New York", State: "NY", Zip: "10001", Country: "US", Phone: "555"})
-	if err != nil || !legacy.Success || !legacy.Data.IsValid || legacy.Data.Normalized == nil || legacy.Data.Normalized.Zip != "10001-1234" {
-		t.Fatalf("bad legacy response: %+v %v", legacy, err)
+	call := (*calls)[0]
+	if call.method != "POST" || call.path != "/api/addresses/validate" {
+		t.Errorf("sent %s %s", call.method, call.path)
 	}
-
-	want := []map[string]any{
-		{"addressLine1": "123 Main St", "city": "New York", "stateProvince": "NY", "postalCode": "10001", "countryCode": "US"},
-		{"name": "J", "addressLine1": "123 Main St", "city": "New York", "stateProvince": "NY", "postalCode": "10001", "countryCode": "US", "phone": "555"},
-	}
-	for i, call := range *calls {
-		if call.path != "/api/shipping/addresses/validate" {
-			t.Errorf("call %d posted to %s", i, call.path)
-		}
-		got, _ := json.Marshal(call.body["address"])
-		expected, _ := json.Marshal(want[i])
-		if string(got) != string(expected) || len(call.body) != 1 {
-			t.Errorf("call %d sent %v, want {address: %s}", i, call.body, expected)
-		}
+	got, _ := json.Marshal(call.body)
+	if want := `{"city":"New York","line1":"123 Main St","postalCode":"10001","state":"NY"}`; string(got) != want {
+		t.Errorf("sent %s, want %s", got, want)
 	}
 }
