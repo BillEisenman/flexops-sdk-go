@@ -19,32 +19,33 @@ type Config struct {
 	AccessToken string
 	WorkspaceID string
 	Timeout     time.Duration
-	MaxRetries  int
+	// MaxRetries is how many times a retryable call is sent again (default 3).
+	MaxRetries int
 }
 
 // Client is the main entry point for the FlexOps SDK.
 type Client struct {
-	WorkspaceID string
-	Auth               *AuthService
-	Workspaces         *WorkspacesService
-	Shipping           *ShippingService
-	Carriers           *CarriersService
-	Webhooks           *WebhooksService
-	Wallet             *WalletService
-	Insurance          *InsuranceService
-	Returns            *ReturnsService
-	ApiKeys            *ApiKeysService
-	Analytics          *AnalyticsService
-	Orders             *OrdersService
-	Inventory          *InventoryService
-	Pickups            *PickupsService
-	ScanForms          *ScanFormsService
-	Rules              *RulesService
-	Offsets            *OffsetService
-	HsCodes            *HsCodesService
+	WorkspaceID   string
+	Auth          *AuthService
+	Workspaces    *WorkspacesService
+	Shipping      *ShippingService
+	Carriers      *CarriersService
+	Webhooks      *WebhooksService
+	Wallet        *WalletService
+	Insurance     *InsuranceService
+	Returns       *ReturnsService
+	Analytics     *AnalyticsService
+	Orders        *OrdersService
+	Inventory     *InventoryService
+	Pickups       *PickupsService
+	ScanForms     *ScanFormsService
+	Rules         *RulesService
+	CarbonOffsets *CarbonOffsetsService
+	HsCodes       *HsCodesService
+	// Writes on these three need a user token or an API key with the resource's write scope.
 	RecurringShipments *RecurringShipmentsService
+	ReportSchedules    *ReportSchedulesService
 	EmailTemplates     *EmailTemplatesService
-	Reports            *ReportsService
 	http               *httpClient
 }
 
@@ -62,18 +63,17 @@ func NewClient(cfg Config) *Client {
 	c.Wallet = &WalletService{c: c}
 	c.Insurance = &InsuranceService{c: c}
 	c.Returns = &ReturnsService{c: c}
-	c.ApiKeys = &ApiKeysService{c: c}
 	c.Analytics = &AnalyticsService{c: c}
 	c.Orders = &OrdersService{c: c}
 	c.Inventory = &InventoryService{c: c}
 	c.Pickups = &PickupsService{c: c}
 	c.ScanForms = &ScanFormsService{c: c}
 	c.Rules = &RulesService{c: c}
-	c.Offsets = &OffsetService{c: c}
+	c.CarbonOffsets = &CarbonOffsetsService{c: c}
 	c.HsCodes = &HsCodesService{c: c}
 	c.RecurringShipments = &RecurringShipmentsService{c: c}
+	c.ReportSchedules = &ReportSchedulesService{c: c}
 	c.EmailTemplates = &EmailTemplatesService{c: c}
-	c.Reports = &ReportsService{c: c}
 	return c
 }
 

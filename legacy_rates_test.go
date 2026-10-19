@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"testing"
 
-	flexops "github.com/BillEisenman/flexops-sdk-go/v2"
+	flexops "github.com/BillEisenman/flexops-sdk-go/v3"
 )
 
 // The Gateway RateShoppingRequest needs full origin and destination addresses, so a

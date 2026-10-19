@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	flexops "github.com/BillEisenman/flexops-sdk-go/v2"
+	flexops "github.com/BillEisenman/flexops-sdk-go/v3"
 )
 
 // The Gateway ShippingController lives at api/Shipping, resolves the workspace from the

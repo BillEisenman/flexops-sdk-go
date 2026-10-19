@@ -8,7 +8,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	flexops "github.com/BillEisenman/flexops-sdk-go/v2"
+	flexops "github.com/BillEisenman/flexops-sdk-go/v3"
 )
 
 // ---------------------------------------------------------------------------
@@ -156,8 +156,9 @@ func TestShipping_CreateLabel(t *testing.T) {
 			t.Errorf("bad body: %v", body)
 		}
 		if calls == 1 || calls == 4 {
-			if body["confirmationToken"] != nil || r.Header.Get("Idempotency-Key") != "" {
-				t.Error("preview contains confirmation")
+			// Every write carries a key; a preview gets a generated one, never the purchase key.
+			if key := r.Header.Get("Idempotency-Key"); body["confirmationToken"] != nil || key == "" || key == "purchase-001" {
+				t.Errorf("preview contains confirmation (key %q)", key)
 			}
 			writeJSON(w, 200, map[string]any{"status": "Preview", "quotedPostageAmount": 8.5, "maximumPostageAmount": 10.25, "confirmationToken": "approval", "currency": "USD", "expiresAt": "2026-09-19T00:05:00Z"})
 		} else {
@@ -292,25 +293,41 @@ func isAuthError(err error, target **flexops.AuthError) bool {
 // 12. Returns — Create CRUD flow
 // ---------------------------------------------------------------------------
 
+// The Gateway opens an RMA at POST returns/rma with a numeric orderId and answers 201
+// with the enveloped RmaDto.
 func TestReturns_Create(t *testing.T) {
-	rma := map[string]any{"rmaId": "rma_xyz", "status": "pending"}
+	var gotPath string
+	var body map[string]any
 	client, _ := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			t.Errorf("expected POST, got %s", r.Method)
 		}
-		writeJSON(w, 200, map[string]any{"success": true, "data": rma})
+		gotPath = r.URL.Path
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		writeJSON(w, 201, map[string]any{"success": true, "data": map[string]any{"rmaNumber": "RMA-1", "rmaId": 7, "orderId": 42, "status": "Pending"}})
 	}))
 
 	resp, err := client.Returns.Create(context.Background(), flexops.ReturnRequest{
-		OrderNumber: "ord_123",
-		Reason:      "damaged",
-		Items:       []flexops.ReturnItem{{SKU: "SKU-001", Quantity: 1}},
+		OrderID: 42,
+		Reason:  "damaged",
+		Items:   []flexops.ReturnItem{{SKU: "SKU-001", Quantity: 1}},
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if !resp.Success {
-		t.Error("expected success = true")
+	if !resp.Success || resp.Data.RmaNumber != "RMA-1" || resp.Data.RmaID != 7 {
+		t.Errorf("bad RMA: %+v", resp)
+	}
+	if gotPath != "/api/workspaces/ws-test-123/returns/rma" {
+		t.Errorf("posted to %s", gotPath)
+	}
+	if body["orderId"] != 42.0 || body["reason"] != "damaged" {
+		t.Errorf("bad body: %v", body)
+	}
+	for _, unset := range []string{"orderNumber", "notes", "customerEmail", "reasonId"} {
+		if _, ok := body[unset]; ok {
+			t.Errorf("sent unset %s: %v", unset, body)
+		}
 	}
 }
 
@@ -321,20 +338,11 @@ func TestReturns_Create(t *testing.T) {
 func TestClient_NewServicesPresent(t *testing.T) {
 	client := flexops.NewClient(flexops.Config{APIKey: "key", WorkspaceID: "ws-123"})
 
-	if client.Offsets == nil {
-		t.Error("Offsets service is nil")
+	if client.CarbonOffsets == nil {
+		t.Error("CarbonOffsets service is nil")
 	}
 	if client.HsCodes == nil {
 		t.Error("HsCodes service is nil")
-	}
-	if client.RecurringShipments == nil {
-		t.Error("RecurringShipments service is nil")
-	}
-	if client.EmailTemplates == nil {
-		t.Error("EmailTemplates service is nil")
-	}
-	if client.Reports == nil {
-		t.Error("Reports service is nil")
 	}
 }
 
@@ -373,21 +381,51 @@ func TestShipping_GetRecommendations(t *testing.T) {
 // 15. Carbon Offsets endpoint
 // ---------------------------------------------------------------------------
 
-func TestOffsets_Offset(t *testing.T) {
-	var gotPath string
-	client, _ := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		gotPath = r.URL.Path
-		writeJSON(w, 200, map[string]any{"success": true, "data": map[string]any{
-			"labelId": "lbl_abc123", "offsetId": "off_xyz", "kgCo2e": 0.42,
-		}})
-	}))
-
-	_, err := client.Offsets.Offset(context.Background(), "lbl_abc123")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+func TestCarbonOffsets_UseGatewayRoutes(t *testing.T) {
+	client, calls := recordingClient(t, map[string]any{"success": true, "data": map[string]any{"offsetId": "off-1", "carbonKg": 0.42}})
+	ctx := context.Background()
+	if _, err := client.CarbonOffsets.Quote(ctx, flexops.CarbonOffsetQuoteRequest{WeightLbs: 2, DistanceMiles: 300}); err != nil {
+		t.Fatal(err)
 	}
-	expected := "/api/workspaces/ws-test-123/shipping/labels/lbl_abc123/offset"
-	if gotPath != expected {
-		t.Errorf("expected path %q, got %q", expected, gotPath)
+	purchase, err := client.CarbonOffsets.Purchase(ctx, flexops.CarbonOffsetPurchaseRequest{TrackingNumber: "9400", WeightLbs: 2, DistanceMiles: 300})
+	if err != nil || purchase.Data.OffsetID != "off-1" || purchase.Data.CarbonKg != 0.42 {
+		t.Fatalf("purchase: %+v %v", purchase, err)
+	}
+	// The fake answers every call with one object, so only the list request is checked here.
+	_, _ = client.CarbonOffsets.List(ctx, 2, 10)
+	if _, err := client.CarbonOffsets.Get(ctx, "off-1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := client.CarbonOffsets.Summary(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := client.CarbonOffsets.GetSettings(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := client.CarbonOffsets.UpdateSettings(ctx, flexops.CarbonOffsetSettings{AutoOffsetEnabled: false}); err != nil {
+		t.Fatal(err)
+	}
+
+	base := "/api/workspaces/ws-test-123/carbon-offsets"
+	want := []struct {
+		call string
+		body string
+	}{
+		{"POST " + base + "/quote", `{"distanceMiles":300,"weightLbs":2}`},
+		{"POST " + base + "/purchase", `{"distanceMiles":300,"trackingNumber":"9400","weightLbs":2}`},
+		{"GET " + base + "?page=2&pageSize=10", "null"},
+		{"GET " + base + "/off-1", "null"},
+		{"GET " + base + "/summary", "null"},
+		{"GET " + base + "/settings", "null"},
+		{"PUT " + base + "/settings", `{"autoOffsetEnabled":false}`},
+	}
+	if len(*calls) != len(want) {
+		t.Fatalf("sent %d requests, want %d", len(*calls), len(want))
+	}
+	for i, w := range want {
+		got, _ := json.Marshal((*calls)[i].body)
+		if call := (*calls)[i].method + " " + (*calls)[i].path + (*calls)[i].query; call != w.call || string(got) != w.body {
+			t.Errorf("call %d: %s %s, want %s %s", i, call, got, w.call, w.body)
+		}
 	}
 }

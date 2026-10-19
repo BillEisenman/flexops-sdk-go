@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	flexops "github.com/BillEisenman/flexops-sdk-go/v2"
+	flexops "github.com/BillEisenman/flexops-sdk-go/v3"
 	"net/http"
 	"os"
 	"reflect"

@@ -70,41 +70,12 @@ func (s *ShippingService) Track(ctx context.Context, trackingNumber string) (Api
 	return wrap[TrackingInfo](s.c.http.get(ctx, "/api/shipping/track/"+url.PathEscape(trackingNumber), nil))
 }
 
-// ValidateShippingAddress validates and corrects an address. It sends the Gateway
-// AddressValidationRequest ({"address": {...}}) and returns the Gateway response.
-func (s *ShippingService) ValidateShippingAddress(ctx context.Context, address ShippingAddress) (AddressValidationResponse, error) {
-	return decode[AddressValidationResponse](s.c.http.post(ctx, "/api/shipping/addresses/validate", AddressValidationRequest{Address: address}))
-}
-
-// ValidateAddress validates a legacy Address.
-//
-// Deprecated: use ValidateShippingAddress. The address is mapped to the Gateway
-// field names; the validated address and suggestions are mapped back, and the
-// Gateway messages are returned as Errors.
-func (s *ShippingService) ValidateAddress(ctx context.Context, address Address) (ApiResponse[AddressValidationResult], error) {
-	response, err := s.ValidateShippingAddress(ctx, address.shippingAddress())
-	if err != nil {
-		return ApiResponse[AddressValidationResult]{}, err
-	}
-	result := AddressValidationResult{IsValid: response.IsValid, Errors: response.Messages}
-	if response.ValidatedAddress != nil {
-		normalized := response.ValidatedAddress.legacyAddress()
-		result.Normalized = &normalized
-	}
-	for _, suggestion := range response.Suggestions {
-		result.Suggestions = append(result.Suggestions, suggestion.legacyAddress())
-	}
-	return ApiResponse[AddressValidationResult]{Success: true, Data: result}, nil
-}
-
-func (a Address) shippingAddress() ShippingAddress {
-	return ShippingAddress{Name: a.Name, AddressLine1: a.Street1, AddressLine2: a.Street2, City: a.City,
-		StateProvince: a.State, PostalCode: a.Zip, CountryCode: a.Country, Phone: a.Phone}
-}
-
-func (a ShippingAddress) legacyAddress() Address {
-	return Address{Name: a.Name, Street1: a.AddressLine1, Street2: a.AddressLine2, City: a.City,
-		State: a.StateProvince, Zip: a.PostalCode, Country: a.CountryCode, Phone: a.Phone}
+// ValidateAddress validates an address with the carrier (POST /api/addresses/validate)
+// and returns the Gateway result without an envelope. Country defaults to "US" on the
+// Gateway. ValidationUnavailable means the check could not complete, not that the
+// address was rejected.
+func (s *ShippingService) ValidateAddress(ctx context.Context, req AddressValidationRequest) (AddressValidationResult, error) {
+	return decode[AddressValidationResult](s.c.http.post(ctx, "/api/addresses/validate", req))
 }
 
 // CreateLabelBatch queues labels for a batch of orders (the Gateway CreateBatchLabelRequest).
