@@ -834,6 +834,14 @@ type CarrierRecommendationRequest struct {
 	Priority              string  `json:"priority,omitempty"`
 }
 
+// CarrierRecommendation is one ranked carrier for a lane.
+//
+// AvgCost is the workspace's own average label cost in USD, and 0 when the
+// carrier was scored on FlexOps network data: network cost is not reported, so
+// 0 does not mean free. The API's dataSource field ("workspace" or "network")
+// says which; this type does not include it yet. ShipmentCount is exact for
+// workspace data and a band floor (5, 10, 25, 50, 100, 250, 500, 1000) for
+// network data.
 type CarrierRecommendation struct {
 	CarrierCode    string  `json:"carrierCode"`
 	Score          float64 `json:"score"`
@@ -845,6 +853,9 @@ type CarrierRecommendation struct {
 	Reason         string  `json:"reason,omitempty"`
 }
 
+// CarrierRecommendationResponse lists ranked carriers for a lane. SampleSize is
+// exact for the workspace's own data and a band floor for each carrier scored
+// on FlexOps network data.
 type CarrierRecommendationResponse struct {
 	Lane            string                  `json:"lane"`
 	SampleSize      int                     `json:"sampleSize"`
@@ -859,6 +870,9 @@ type DeliveryPredictionRequest struct {
 	ShipDate              string `json:"shipDate,omitempty"`
 }
 
+// DeliveryPredictionResponse is a delivery date range for a carrier and lane.
+// SampleSize is exact for the workspace's own data and a band floor for
+// FlexOps network data.
 type DeliveryPredictionResponse struct {
 	CarrierCode           string  `json:"carrierCode"`
 	PredictedDeliveryDate string  `json:"predictedDeliveryDate"`
