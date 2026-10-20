@@ -30,47 +30,108 @@ type LoginRequest struct {
 	Password string `json:"password"`
 }
 
+// LoginResponse is the Gateway login and refresh-token result.
 type LoginResponse struct {
-	AccessToken  string `json:"accessToken"`
-	RefreshToken string `json:"refreshToken"`
-	ExpiresIn    int    `json:"expiresIn"`
+	Token             string   `json:"token"`
+	RefreshToken      string   `json:"refreshToken"`
+	ExpiresAt         string   `json:"expiresAt"`
+	UserID            string   `json:"userId"`
+	Email             string   `json:"email"`
+	FirstName         string   `json:"firstName"`
+	LastName          string   `json:"lastName"`
+	Roles             []string `json:"roles"`
+	RequiresTwoFactor bool     `json:"requiresTwoFactor"`
+	TwoFactorToken    string   `json:"twoFactorToken,omitempty"`
+	TwoFactorMethod   string   `json:"twoFactorMethod,omitempty"`
 }
 
-type RegisterRequest struct {
-	Email     string `json:"email"`
-	Password  string `json:"password"`
-	FirstName string `json:"firstName,omitempty"`
-	LastName  string `json:"lastName,omitempty"`
+// WorkspaceRole is a member's role, sent and returned as the Gateway number.
+type WorkspaceRole int
+
+const (
+	WorkspaceRoleOwner    WorkspaceRole = 0
+	WorkspaceRoleAdmin    WorkspaceRole = 1
+	WorkspaceRoleMember   WorkspaceRole = 2
+	WorkspaceRoleMerchant WorkspaceRole = 3
+)
+
+// WorkspaceEntitlement is a product plan the workspace holds.
+type WorkspaceEntitlement struct {
+	ProductType        string `json:"productType"`
+	PlanID             string `json:"planId"`
+	IsPrimary          bool   `json:"isPrimary"`
+	SubscriptionStatus string `json:"subscriptionStatus"`
 }
 
+// Workspace is a workspace as Workspaces.List returns it.
 type Workspace struct {
-	ID       string `json:"id"`
-	Name     string `json:"name"`
-	Slug     string `json:"slug"`
-	PlanID   string `json:"planId"`
-	IsActive bool   `json:"isActive"`
+	ID           string                 `json:"id"`
+	Name         string                 `json:"name"`
+	Slug         string                 `json:"slug"`
+	MyRole       WorkspaceRole          `json:"myRole"`
+	PlanID       string                 `json:"planId"`
+	MemberCount  int                    `json:"memberCount"`
+	IsCreator    bool                   `json:"isCreator"`
+	ProductType  string                 `json:"productType,omitempty"`
+	Entitlements []WorkspaceEntitlement `json:"entitlements"`
 }
 
-type CreateWorkspaceRequest struct {
-	Name string `json:"name"`
-	Slug string `json:"slug,omitempty"`
+// WorkspaceDetail is a workspace as Workspaces.Get returns it.
+type WorkspaceDetail struct {
+	ID                  string                 `json:"id"`
+	Name                string                 `json:"name"`
+	Slug                string                 `json:"slug"`
+	Domain              string                 `json:"domain,omitempty"`
+	PlanID              string                 `json:"planId"`
+	Status              int                    `json:"status"`
+	SubscriptionStatus  string                 `json:"subscriptionStatus"`
+	UserLimit           int                    `json:"userLimit"`
+	CurrentUserCount    int                    `json:"currentUserCount"`
+	MonthlyLabelLimit   int                    `json:"monthlyLabelLimit"`
+	LabelsUsedThisMonth int                    `json:"labelsUsedThisMonth"`
+	IsTrialing          bool                   `json:"isTrialing"`
+	TrialExpiresAt      string                 `json:"trialExpiresAt,omitempty"`
+	MyRole              WorkspaceRole          `json:"myRole"`
+	CanManageMembers    bool                   `json:"canManageMembers"`
+	CanManageBilling    bool                   `json:"canManageBilling"`
+	CreatedAt           string                 `json:"createdAt"`
+	Entitlements        []WorkspaceEntitlement `json:"entitlements"`
 }
 
+// WorkspaceMember is one member in MemberList. Status and StoreScope are the Gateway
+// numbers (Status 0 = active, 1 = pending; StoreScope 0 = all stores).
 type WorkspaceMember struct {
-	UserID string `json:"userId"`
-	Email  string `json:"email"`
-	Role   string `json:"role"`
+	MembershipID       string        `json:"membershipId"`
+	UserID             string        `json:"userId"`
+	Email              string        `json:"email"`
+	Name               string        `json:"name,omitempty"`
+	Role               WorkspaceRole `json:"role"`
+	Status             int           `json:"status"`
+	JoinedAt           string        `json:"joinedAt"`
+	IsCreator          bool          `json:"isCreator"`
+	IsDeactivated      bool          `json:"isDeactivated"`
+	StoreScope         int           `json:"storeScope"`
+	StoreConnectionIDs []string      `json:"storeConnectionIds"`
 }
 
-type Address struct {
-	Name    string `json:"name,omitempty"`
-	Street1 string `json:"street1"`
-	Street2 string `json:"street2,omitempty"`
-	City    string `json:"city"`
-	State   string `json:"state"`
-	Zip     string `json:"zip"`
-	Country string `json:"country"`
-	Phone   string `json:"phone,omitempty"`
+// PendingInvite is an invitation not yet accepted.
+type PendingInvite struct {
+	InviteID           string        `json:"inviteId"`
+	Email              string        `json:"email"`
+	Role               WorkspaceRole `json:"role"`
+	ExpiresAt          string        `json:"expiresAt"`
+	InvitedByName      string        `json:"invitedByName"`
+	StoreScope         int           `json:"storeScope"`
+	StoreConnectionIDs []string      `json:"storeConnectionIds"`
+}
+
+// MemberList is what Workspaces.ListMembers returns.
+type MemberList struct {
+	Members        []WorkspaceMember `json:"members"`
+	PendingInvites []PendingInvite   `json:"pendingInvites"`
+	UserLimit      int               `json:"userLimit"`
+	ActiveCount    int               `json:"activeCount"`
+	CanInviteMore  bool              `json:"canInviteMore"`
 }
 
 type Parcel struct {
@@ -179,6 +240,8 @@ type CustomsItem struct {
 	WeightOz      float64 `json:"weightOz"`
 	HsCode        string  `json:"hsCode,omitempty"`
 	OriginCountry string  `json:"originCountry"`
+	// SkuOrProductID is an optional product reference.
+	SkuOrProductID string `json:"skuOrProductId,omitempty"`
 }
 type CustomsDeclaration struct {
 	ContentsType        string        `json:"contentsType"`
@@ -239,6 +302,8 @@ type ReturnLabelOptions struct {
 	PaymentConfirmed bool `json:"paymentConfirmed,omitempty"`
 	// HazmatClassification is what the return holds. Sent only when set.
 	HazmatClassification *HazmatClassification `json:"hazmatClassification,omitempty"`
+	// RateIndicator is the USPS rate indicator for the return label.
+	RateIndicator string `json:"rateIndicator,omitempty"`
 }
 
 // LabelPurchaseResult is the unwrapped Gateway response. Status == "Preview"
@@ -285,30 +350,39 @@ type TrackingInfo struct {
 	EstimatedDeliveryDate string `json:"estimatedDeliveryDate,omitempty"`
 }
 
-// AddressValidationRequest is the Gateway address-validation body.
+// AddressValidationRequest is the Gateway address-validation body. Line1, City and
+// PostalCode are required; Country defaults to "US" on the Gateway.
 type AddressValidationRequest struct {
-	Address ShippingAddress `json:"address"`
+	Name       string `json:"name,omitempty"`
+	Line1      string `json:"line1"`
+	Line2      string `json:"line2,omitempty"`
+	City       string `json:"city"`
+	State      string `json:"state,omitempty"`
+	PostalCode string `json:"postalCode"`
+	Country    string `json:"country,omitempty"`
 }
 
-// AddressValidationResponse is the Gateway address-validation result.
-type AddressValidationResponse struct {
-	ValidationUnavailable bool              `json:"validationUnavailable"`
-	IsValid               bool              `json:"isValid"`
-	ConfidenceScore       float64           `json:"confidenceScore"`
-	ValidatedAddress      *ShippingAddress  `json:"validatedAddress,omitempty"`
-	IsResidential         *bool             `json:"isResidential,omitempty"`
-	AddressClassification string            `json:"addressClassification,omitempty"`
-	Provider              string            `json:"provider"`
-	Messages              []string          `json:"messages,omitempty"`
-	Suggestions           []ShippingAddress `json:"suggestions,omitempty"`
-}
-
-// Deprecated: returned by the deprecated ValidateAddress; use AddressValidationResponse.
+// AddressValidationResult is the Gateway address-validation result.
 type AddressValidationResult struct {
-	IsValid     bool      `json:"isValid"`
-	Normalized  *Address  `json:"normalized,omitempty"`
-	Suggestions []Address `json:"suggestions,omitempty"`
-	Errors      []string  `json:"errors,omitempty"`
+	// ValidationUnavailable is true when the carrier check could not complete; it is
+	// not an address rejection.
+	ValidationUnavailable bool              `json:"validationUnavailable"`
+	CheckedAt             string            `json:"checkedAt,omitempty"`
+	IsValid               bool              `json:"isValid"`
+	SuggestedAddress      *SuggestedAddress `json:"suggestedAddress,omitempty"`
+	IsResidential         *bool             `json:"isResidential,omitempty"`
+	Warnings              []string          `json:"warnings"`
+	ValidatedBy           string            `json:"validatedBy,omitempty"`
+}
+
+// SuggestedAddress is a carrier-suggested address correction.
+type SuggestedAddress struct {
+	Line1      string `json:"line1"`
+	Line2      string `json:"line2,omitempty"`
+	City       string `json:"city"`
+	State      string `json:"state"`
+	PostalCode string `json:"postalCode"`
+	Country    string `json:"country"`
 }
 
 // Deprecated: the Gateway batch route takes orders with package measurements,
@@ -434,31 +508,88 @@ type UpdateWebhookRequest struct {
 	Status string `json:"status,omitempty"`
 }
 
+// WalletBalance is the workspace wallet balance (GET /api/wallet/my-balance).
 type WalletBalance struct {
-	Balance           float64 `json:"balance"`
-	Currency          string  `json:"currency"`
-	AutoReloadEnabled bool    `json:"autoReloadEnabled"`
+	HasWallet    bool    `json:"hasWallet"`
+	BalanceCents int64   `json:"balanceCents"`
+	Balance      float64 `json:"balance"`
+}
+
+// InsuranceQuoteRequest prices coverage. DeclaredValue and CarrierCode are required.
+type InsuranceQuoteRequest struct {
+	DeclaredValue  float64 `json:"declaredValue"`
+	CarrierCode    string  `json:"carrierCode"`
+	TrackingNumber string  `json:"trackingNumber,omitempty"`
+	Provider       string  `json:"provider,omitempty"`
 }
 
 type InsuranceQuote struct {
-	Provider string  `json:"provider"`
-	Premium  float64 `json:"premium"`
-	Coverage float64 `json:"coverage"`
+	DeclaredValue  float64 `json:"declaredValue"`
+	CoverageAmount float64 `json:"coverageAmount"`
+	Premium        float64 `json:"premium"`
+	CoverageTier   string  `json:"coverageTier"`
+	CarrierCode    string  `json:"carrierCode"`
+	CoverageDays   int     `json:"coverageDays"`
+	Provider       string  `json:"provider"`
+}
+
+// PurchaseInsuranceRequest buys a policy for a shipped label.
+type PurchaseInsuranceRequest struct {
+	TrackingNumber string  `json:"trackingNumber"`
+	CarrierCode    string  `json:"carrierCode"`
+	DeclaredValue  float64 `json:"declaredValue"`
+	CoverageTier   string  `json:"coverageTier,omitempty"`
+	Provider       string  `json:"provider,omitempty"`
 }
 
 type InsurancePolicy struct {
-	PolicyID       string  `json:"policyId"`
-	TrackingNumber string  `json:"trackingNumber"`
-	Provider       string  `json:"provider"`
-	Coverage       float64 `json:"coverage"`
-	Premium        float64 `json:"premium"`
-	Status         string  `json:"status"`
+	PolicyID          string  `json:"policyId"`
+	TrackingNumber    string  `json:"trackingNumber"`
+	CarrierCode       string  `json:"carrierCode"`
+	DeclaredValue     float64 `json:"declaredValue"`
+	CoverageAmount    float64 `json:"coverageAmount"`
+	Premium           float64 `json:"premium"`
+	Status            string  `json:"status"`
+	CoverageTier      string  `json:"coverageTier,omitempty"`
+	PurchasedAt       string  `json:"purchasedAt"`
+	ExpiresAt         string  `json:"expiresAt"`
+	CancelledAt       string  `json:"cancelledAt,omitempty"`
+	Provider          string  `json:"provider,omitempty"`
+	ProviderReference string  `json:"providerReference,omitempty"`
+	IsSandbox         bool    `json:"isSandbox"`
 }
 
+// FileClaimRequest files a claim against a policy. EvidenceJSON is optional.
+type FileClaimRequest struct {
+	PolicyID     string  `json:"policyId"`
+	ClaimReason  string  `json:"claimReason"`
+	ClaimAmount  float64 `json:"claimAmount"`
+	EvidenceJSON string  `json:"evidenceJson,omitempty"`
+}
+
+type InsuranceClaim struct {
+	ClaimID         string   `json:"claimId"`
+	PolicyID        string   `json:"policyId"`
+	ClaimReason     string   `json:"claimReason"`
+	ClaimAmount     float64  `json:"claimAmount"`
+	Status          string   `json:"status"`
+	SubmittedAt     string   `json:"submittedAt"`
+	ResolvedAt      string   `json:"resolvedAt,omitempty"`
+	ApprovedAmount  *float64 `json:"approvedAmount,omitempty"`
+	ResolutionNotes string   `json:"resolutionNotes,omitempty"`
+	IsSandbox       bool     `json:"isSandbox"`
+}
+
+// ReturnRequest opens an RMA (the Gateway CreateRmaRequest). OrderID, Reason and at
+// least one item are required.
 type ReturnRequest struct {
-	OrderNumber string       `json:"orderNumber"`
-	Reason      string       `json:"reason"`
-	Items       []ReturnItem `json:"items"`
+	OrderID       int64        `json:"orderId"`
+	OrderNumber   string       `json:"orderNumber,omitempty"`
+	Reason        string       `json:"reason"`
+	Items         []ReturnItem `json:"items"`
+	Notes         string       `json:"notes,omitempty"`
+	CustomerEmail string       `json:"customerEmail,omitempty"`
+	ReasonID      *int         `json:"reasonId,omitempty"`
 }
 
 type ReturnItem struct {
@@ -467,27 +598,82 @@ type ReturnItem struct {
 	Reason   string `json:"reason,omitempty"`
 }
 
+// RmaItem is a returned line as the Gateway reports it.
+type RmaItem struct {
+	SKU           string  `json:"sku"`
+	Description   string  `json:"description,omitempty"`
+	Quantity      int     `json:"quantity"`
+	UnitPrice     float64 `json:"unitPrice"`
+	ExtendedPrice float64 `json:"extendedPrice"`
+	Reason        string  `json:"reason,omitempty"`
+}
+
+// Rma is a return merchandise authorization, as Returns.Create returns it.
+type Rma struct {
+	RmaNumber                 string    `json:"rmaNumber"`
+	RmaID                     int64     `json:"rmaId"`
+	OrderID                   int64     `json:"orderId"`
+	OrderNumber               string    `json:"orderNumber,omitempty"`
+	CustomerEmail             string    `json:"customerEmail,omitempty"`
+	Status                    string    `json:"status"`
+	Reason                    string    `json:"reason,omitempty"`
+	CreatedAt                 string    `json:"createdAt"`
+	Items                     []RmaItem `json:"items"`
+	ItemCount                 int       `json:"itemCount"`
+	ReturnLabelTrackingNumber string    `json:"returnLabelTrackingNumber,omitempty"`
+	Notes                     string    `json:"notes,omitempty"`
+	ReturnID                  *int64    `json:"returnId,omitempty"`
+	DispositionStatus         string    `json:"dispositionStatus,omitempty"`
+}
+
+// ReturnListOptions filters Returns.List. StartDate and EndDate are ISO 8601 dates.
+type ReturnListOptions struct {
+	StartDate string
+	EndDate   string
+	Page      int
+	PageSize  int
+}
+
+// ReturnAuthorization is a return as Returns.List (summary fields) and Returns.Get
+// (with Items, Reason, Notes, TrackingNumber and CarrierCode) return it.
 type ReturnAuthorization struct {
-	ID          string       `json:"id"`
-	OrderNumber string       `json:"orderNumber"`
-	Status      string       `json:"status"`
-	Items       []ReturnItem `json:"items"`
+	ReturnID        int64     `json:"returnId"`
+	RmaNumber       string    `json:"rmaNumber,omitempty"`
+	OrderID         int64     `json:"orderId"`
+	Status          string    `json:"status"`
+	ReturnDate      string    `json:"returnDate"`
+	DispositionType string    `json:"dispositionType,omitempty"`
+	Items           []RmaItem `json:"items,omitempty"`
+	Reason          string    `json:"reason,omitempty"`
+	Notes           string    `json:"notes,omitempty"`
+	TrackingNumber  string    `json:"trackingNumber,omitempty"`
+	CarrierCode     string    `json:"carrierCode,omitempty"`
 }
 
-type ApiKeyInfo struct {
-	ID        string `json:"id"`
-	Name      string `json:"name"`
-	Prefix    string `json:"prefix"`
-	CreatedAt string `json:"createdAt"`
+// ReturnDisposition is what happens to an inspected item, sent as the Gateway number.
+type ReturnDisposition int
+
+const (
+	ReturnDispositionRestock ReturnDisposition = 0
+	ReturnDispositionDispose ReturnDisposition = 1
+	ReturnDispositionForward ReturnDisposition = 2
+)
+
+// ReceiveReturnRequest records a received RMA (the Gateway ReceiveRmaRequest).
+// WarehouseID defaults to 1 on the Gateway when left 0.
+type ReceiveReturnRequest struct {
+	RmaNumber      string          `json:"rmaNumber"`
+	WarehouseID    int             `json:"warehouseId,omitempty"`
+	InspectedItems []InspectedItem `json:"inspectedItems"`
 }
 
-type CreateApiKeyRequest struct {
-	Name string `json:"name"`
-}
-
-type CreateApiKeyResponse struct {
-	ID  string `json:"id"`
-	Key string `json:"key"`
+// InspectedItem is one inspected line of a received RMA.
+type InspectedItem struct {
+	PartNumber      string            `json:"partNumber"`
+	PartDescription string            `json:"partDescription,omitempty"`
+	Quantity        int               `json:"quantity"`
+	Disposition     ReturnDisposition `json:"disposition"`
+	InspectionNotes string            `json:"inspectionNotes,omitempty"`
 }
 
 type ShipmentsTrend struct {
@@ -502,19 +688,22 @@ type CarrierSummary struct {
 }
 
 type ShippingRule struct {
-	ID         string          `json:"id"`
-	Name       string          `json:"name"`
-	Priority   int             `json:"priority"`
-	IsActive   bool            `json:"isActive"`
-	Conditions []RuleCondition `json:"conditions"`
-	Actions    []RuleAction    `json:"actions"`
+	ID          string          `json:"id"`
+	Name        string          `json:"name"`
+	Priority    int             `json:"priority"`
+	IsEnabled   bool            `json:"isEnabled"`
+	WarehouseID string          `json:"warehouseId,omitempty"`
+	Conditions  []RuleCondition `json:"conditions"`
+	Actions     []RuleAction    `json:"actions"`
+	CreatedAt   string          `json:"createdAt,omitempty"`
+	UpdatedAt   string          `json:"updatedAt,omitempty"`
 }
 
 type RuleCondition struct {
 	Field    string `json:"field"`
 	Operator string `json:"operator"`
 	Value    string `json:"value"`
-	Group    int    `json:"group,omitempty"`
+	Group    *int   `json:"group,omitempty"`
 }
 
 type RuleAction struct {
@@ -522,18 +711,108 @@ type RuleAction struct {
 	Value string `json:"value"`
 }
 
-type PickupRequest struct {
-	Carrier   string `json:"carrier"`
-	Date      string `json:"date"`
-	TimeStart string `json:"timeStart,omitempty"`
-	TimeEnd   string `json:"timeEnd,omitempty"`
+// CreateShippingRuleRequest creates a rule. Name and at least one condition and action
+// are required; IsEnabled is sent as given.
+type CreateShippingRuleRequest struct {
+	Name        string          `json:"name"`
+	Priority    int             `json:"priority"`
+	IsEnabled   bool            `json:"isEnabled"`
+	WarehouseID string          `json:"warehouseId,omitempty"`
+	Conditions  []RuleCondition `json:"conditions"`
+	Actions     []RuleAction    `json:"actions"`
 }
 
-type PickupConfirmation struct {
-	ID      string `json:"id"`
-	Carrier string `json:"carrier"`
-	Date    string `json:"date"`
-	Status  string `json:"status"`
+// UpdateShippingRuleRequest changes a rule. Nil fields are left as they are.
+type UpdateShippingRuleRequest struct {
+	Name       *string         `json:"name,omitempty"`
+	Priority   *int            `json:"priority,omitempty"`
+	IsEnabled  *bool           `json:"isEnabled,omitempty"`
+	Conditions []RuleCondition `json:"conditions,omitempty"`
+	Actions    []RuleAction    `json:"actions,omitempty"`
+}
+
+// RulePriority is one entry of a Rules.Reorder call.
+type RulePriority struct {
+	RuleID   string `json:"ruleId"`
+	Priority int    `json:"priority"`
+}
+
+// TestShippingRuleRequest is a sample shipment for Rules.Test. DestinationCountry is
+// required ("US" if unsure).
+type TestShippingRuleRequest struct {
+	WeightOz              float64  `json:"weightOz"`
+	DeclaredValue         float64  `json:"declaredValue"`
+	DestinationCountry    string   `json:"destinationCountry"`
+	DestinationState      string   `json:"destinationState,omitempty"`
+	DestinationPostalCode string   `json:"destinationPostalCode,omitempty"`
+	OrderSource           string   `json:"orderSource,omitempty"`
+	ItemCount             int      `json:"itemCount,omitempty"`
+	ShipMethod            string   `json:"shipMethod,omitempty"`
+	DestinationZone       string   `json:"destinationZone,omitempty"`
+	Tags                  []string `json:"tags,omitempty"`
+}
+
+type TestShippingRuleResponse struct {
+	Traces          []RuleEvaluationTrace `json:"traces"`
+	WinningRuleID   string                `json:"winningRuleId,omitempty"`
+	WinningRuleName string                `json:"winningRuleName,omitempty"`
+	AppliedActions  []RuleAction          `json:"appliedActions"`
+}
+
+type RuleEvaluationTrace struct {
+	RuleID          string           `json:"ruleId"`
+	RuleName        string           `json:"ruleName"`
+	Priority        int              `json:"priority"`
+	Matched         bool             `json:"matched"`
+	IsWinner        bool             `json:"isWinner"`
+	ConditionTraces []ConditionTrace `json:"conditionTraces"`
+}
+
+type ConditionTrace struct {
+	Field         string `json:"field"`
+	Operator      string `json:"operator"`
+	ExpectedValue string `json:"expectedValue"`
+	ActualValue   string `json:"actualValue"`
+	Matched       bool   `json:"matched"`
+}
+
+// SchedulePickupRequest schedules a carrier pickup. Dates and times are ISO 8601;
+// Country defaults to "US" and PackageCount to 1 on the Gateway.
+type SchedulePickupRequest struct {
+	CarrierCode         string   `json:"carrierCode"`
+	PickupDate          string   `json:"pickupDate"`
+	Street              string   `json:"street"`
+	City                string   `json:"city"`
+	State               string   `json:"state"`
+	PostalCode          string   `json:"postalCode"`
+	Country             string   `json:"country,omitempty"`
+	PackageCount        int      `json:"packageCount,omitempty"`
+	TotalWeightOz       *float64 `json:"totalWeightOz,omitempty"`
+	SpecialInstructions string   `json:"specialInstructions,omitempty"`
+	ReadyTime           string   `json:"readyTime,omitempty"`
+	CloseTime           string   `json:"closeTime,omitempty"`
+	ContactName         string   `json:"contactName,omitempty"`
+	ContactPhone        string   `json:"contactPhone,omitempty"`
+}
+
+// Pickup is a scheduled pickup as the Gateway returns it.
+type Pickup struct {
+	PickupID           string `json:"pickupId,omitempty"`
+	CarrierCode        string `json:"carrierCode"`
+	PickupDate         string `json:"pickupDate"`
+	Status             string `json:"status"`
+	ConfirmationNumber string `json:"confirmationNumber,omitempty"`
+	WindowStart        string `json:"windowStart,omitempty"`
+	WindowEnd          string `json:"windowEnd,omitempty"`
+	Street             string `json:"street,omitempty"`
+	City               string `json:"city,omitempty"`
+	State              string `json:"state,omitempty"`
+	PackageCount       int    `json:"packageCount"`
+	CreatedAt          string `json:"createdAt,omitempty"`
+	Message            string `json:"message,omitempty"`
+	Success            bool   `json:"success"`
+	ErrorMessage       string `json:"errorMessage,omitempty"`
+	IsSandbox          bool   `json:"isSandbox"`
 }
 
 type ScanFormRequest struct {
@@ -604,4 +883,250 @@ type DeliveryPredictionResponse struct {
 	Confidence            float64 `json:"confidence"`
 	OnTimeRate            float64 `json:"onTimeRate"`
 	SampleSize            int     `json:"sampleSize"`
+}
+
+// HsCodeSearchRequest searches HS codes. Query is required.
+type HsCodeSearchRequest struct {
+	Query              string
+	DestinationCountry string
+	MaxResults         int
+}
+
+type HsCodeResult struct {
+	HsCode             string   `json:"hsCode"`
+	Description        string   `json:"description"`
+	Chapter            string   `json:"chapter"`
+	ChapterDescription string   `json:"chapterDescription"`
+	DutyRatePercent    *float64 `json:"dutyRatePercent,omitempty"`
+	Notes              string   `json:"notes,omitempty"`
+}
+
+// LandedCostRequest estimates duty and tax. Items use per-unit value and weight.
+type LandedCostRequest struct {
+	DestinationCountry string        `json:"destinationCountry"`
+	Items              []CustomsItem `json:"items"`
+	ShippingCost       float64       `json:"shippingCost"`
+}
+
+type LandedCostEstimate struct {
+	ShippingCost    float64 `json:"shippingCost"`
+	EstimatedDuty   float64 `json:"estimatedDuty"`
+	EstimatedTax    float64 `json:"estimatedTax"`
+	TotalLandedCost float64 `json:"totalLandedCost"`
+	Currency        string  `json:"currency"`
+	DutyRateApplied string  `json:"dutyRateApplied,omitempty"`
+	IsEstimate      bool    `json:"isEstimate"`
+	Disclaimer      string  `json:"disclaimer,omitempty"`
+}
+
+type CarbonOffsetQuoteRequest struct {
+	WeightLbs     float64 `json:"weightLbs"`
+	DistanceMiles float64 `json:"distanceMiles"`
+}
+
+type CarbonOffsetQuote struct {
+	CarbonKg               float64 `json:"carbonKg"`
+	CostUsd                float64 `json:"costUsd"`
+	EquivalentTreesPlanted float64 `json:"equivalentTreesPlanted"`
+	Provider               string  `json:"provider"`
+}
+
+type CarbonOffsetPurchaseRequest struct {
+	TrackingNumber string  `json:"trackingNumber"`
+	WeightLbs      float64 `json:"weightLbs"`
+	DistanceMiles  float64 `json:"distanceMiles"`
+}
+
+// CarbonOffset is a purchased offset.
+type CarbonOffset struct {
+	OffsetID          string  `json:"offsetId"`
+	TrackingNumber    string  `json:"trackingNumber"`
+	CarbonKg          float64 `json:"carbonKg"`
+	CostUsd           float64 `json:"costUsd"`
+	Status            string  `json:"status"`
+	Provider          string  `json:"provider"`
+	ProviderReference string  `json:"providerReference,omitempty"`
+	IsAutoOffset      bool    `json:"isAutoOffset"`
+	PurchasedAt       string  `json:"purchasedAt"`
+}
+
+type CarbonOffsetSummary struct {
+	TotalCarbonKg          float64 `json:"totalCarbonKg"`
+	TotalCostUsd           float64 `json:"totalCostUsd"`
+	TotalOffsets           int     `json:"totalOffsets"`
+	EquivalentTreesPlanted float64 `json:"equivalentTreesPlanted"`
+}
+
+type CarbonOffsetSettings struct {
+	AutoOffsetEnabled bool `json:"autoOffsetEnabled"`
+}
+
+// RecurrenceInterval is how often a recurring shipment runs, sent as the Gateway number.
+// RecurrenceCustom uses CronExpression.
+type RecurrenceInterval int
+
+const (
+	RecurrenceDaily    RecurrenceInterval = 0
+	RecurrenceWeekly   RecurrenceInterval = 1
+	RecurrenceBiweekly RecurrenceInterval = 2
+	RecurrenceMonthly  RecurrenceInterval = 3
+	RecurrenceCustom   RecurrenceInterval = 4
+)
+
+// RecurringShipment is a recurring shipment schedule as the Gateway returns it.
+type RecurringShipment struct {
+	ID             string             `json:"id"`
+	WorkspaceID    string             `json:"workspaceId"`
+	PresetID       string             `json:"presetId,omitempty"`
+	PresetName     string             `json:"presetName,omitempty"`
+	AddressID      string             `json:"addressId,omitempty"`
+	AddressSummary string             `json:"addressSummary,omitempty"`
+	Name           string             `json:"name"`
+	Interval       RecurrenceInterval `json:"interval"`
+	IntervalName   string             `json:"intervalName"`
+	CronExpression string             `json:"cronExpression,omitempty"`
+	NextRunUtc     string             `json:"nextRunUtc"`
+	LastRunUtc     string             `json:"lastRunUtc,omitempty"`
+	IsActive       bool               `json:"isActive"`
+	FailureCount   int                `json:"failureCount"`
+	MaxFailures    int                `json:"maxFailures"`
+	LastError      string             `json:"lastError,omitempty"`
+	CreatedAt      string             `json:"createdAt"`
+}
+
+// CreateRecurringShipmentRequest creates a schedule. Name and FirstRunUtc (ISO 8601)
+// are required; a MaxFailures of 0 uses the Gateway default (3).
+type CreateRecurringShipmentRequest struct {
+	Name           string             `json:"name"`
+	PresetID       string             `json:"presetId,omitempty"`
+	AddressID      string             `json:"addressId,omitempty"`
+	Interval       RecurrenceInterval `json:"interval"`
+	CronExpression string             `json:"cronExpression,omitempty"`
+	FirstRunUtc    string             `json:"firstRunUtc"`
+	MaxFailures    int                `json:"maxFailures,omitempty"`
+}
+
+// UpdateRecurringShipmentRequest changes a schedule. Unset fields are left as they are.
+type UpdateRecurringShipmentRequest struct {
+	Name           string              `json:"name,omitempty"`
+	PresetID       string              `json:"presetId,omitempty"`
+	AddressID      string              `json:"addressId,omitempty"`
+	Interval       *RecurrenceInterval `json:"interval,omitempty"`
+	CronExpression string              `json:"cronExpression,omitempty"`
+	MaxFailures    *int                `json:"maxFailures,omitempty"`
+}
+
+// ReportFormat is a scheduled report's file format, sent as the Gateway number.
+type ReportFormat int
+
+const (
+	ReportFormatCsv  ReportFormat = 0
+	ReportFormatJSON ReportFormat = 1
+)
+
+// ReportFrequency is how often a report is sent, sent as the Gateway number.
+type ReportFrequency int
+
+const (
+	ReportFrequencyDaily   ReportFrequency = 0
+	ReportFrequencyWeekly  ReportFrequency = 1
+	ReportFrequencyMonthly ReportFrequency = 2
+)
+
+// ReportSchedule is a report schedule as the Gateway returns it. TimeOfDayUtc is
+// "HH:mm:ss"; RecipientEmails is comma-separated.
+type ReportSchedule struct {
+	ID                   string          `json:"id"`
+	WorkspaceID          string          `json:"workspaceId"`
+	ReportType           string          `json:"reportType"`
+	Format               ReportFormat    `json:"format"`
+	FilterParametersJSON string          `json:"filterParametersJson,omitempty"`
+	FrequencyType        ReportFrequency `json:"frequencyType"`
+	FrequencyName        string          `json:"frequencyName"`
+	DayOfWeek            *int            `json:"dayOfWeek,omitempty"`
+	DayOfMonth           *int            `json:"dayOfMonth,omitempty"`
+	TimeOfDayUtc         string          `json:"timeOfDayUtc"`
+	NextRunUtc           string          `json:"nextRunUtc"`
+	LastRunUtc           string          `json:"lastRunUtc,omitempty"`
+	IsEnabled            bool            `json:"isEnabled"`
+	RecipientEmails      string          `json:"recipientEmails"`
+	FailureCount         int             `json:"failureCount"`
+	MaxFailures          int             `json:"maxFailures"`
+	LastError            string          `json:"lastError,omitempty"`
+	CreatedAt            string          `json:"createdAt"`
+}
+
+// CreateReportScheduleRequest creates a schedule. ReportType (free text, e.g.
+// "shipments"), TimeOfDayUtc ("HH:mm:ss") and RecipientEmails (comma-separated) are
+// required. DayOfWeek (0-6, Sunday 0) is for weekly reports, DayOfMonth (1-28) for
+// monthly ones; a MaxFailures of 0 uses the Gateway default (3).
+type CreateReportScheduleRequest struct {
+	ReportType           string          `json:"reportType"`
+	Format               ReportFormat    `json:"format"`
+	FilterParametersJSON string          `json:"filterParametersJson,omitempty"`
+	FrequencyType        ReportFrequency `json:"frequencyType"`
+	DayOfWeek            *int            `json:"dayOfWeek,omitempty"`
+	DayOfMonth           *int            `json:"dayOfMonth,omitempty"`
+	TimeOfDayUtc         string          `json:"timeOfDayUtc"`
+	RecipientEmails      string          `json:"recipientEmails"`
+	MaxFailures          int             `json:"maxFailures,omitempty"`
+}
+
+// UpdateReportScheduleRequest changes a schedule. Unset fields are left as they are.
+type UpdateReportScheduleRequest struct {
+	ReportType           string           `json:"reportType,omitempty"`
+	Format               *ReportFormat    `json:"format,omitempty"`
+	FilterParametersJSON string           `json:"filterParametersJson,omitempty"`
+	FrequencyType        *ReportFrequency `json:"frequencyType,omitempty"`
+	DayOfWeek            *int             `json:"dayOfWeek,omitempty"`
+	DayOfMonth           *int             `json:"dayOfMonth,omitempty"`
+	TimeOfDayUtc         string           `json:"timeOfDayUtc,omitempty"`
+	RecipientEmails      string           `json:"recipientEmails,omitempty"`
+	MaxFailures          *int             `json:"maxFailures,omitempty"`
+}
+
+// TrackingEmailEvent is the tracking event a template is sent for, sent as the Gateway number.
+type TrackingEmailEvent int
+
+const (
+	TrackingEmailLabelCreated   TrackingEmailEvent = 0
+	TrackingEmailInTransit      TrackingEmailEvent = 1
+	TrackingEmailOutForDelivery TrackingEmailEvent = 2
+	TrackingEmailDelivered      TrackingEmailEvent = 3
+	TrackingEmailException      TrackingEmailEvent = 4
+	TrackingEmailReturnToSender TrackingEmailEvent = 5
+)
+
+// EmailTemplate is a tracking email template as the Gateway returns it.
+type EmailTemplate struct {
+	ID               string             `json:"id"`
+	WorkspaceID      string             `json:"workspaceId"`
+	EventType        TrackingEmailEvent `json:"eventType"`
+	EventTypeName    string             `json:"eventTypeName"`
+	SubjectTemplate  string             `json:"subjectTemplate"`
+	HTMLBodyTemplate string             `json:"htmlBodyTemplate"`
+	IsEnabled        bool               `json:"isEnabled"`
+	CreatedAt        string             `json:"createdAt"`
+	UpdatedAt        string             `json:"updatedAt"`
+}
+
+// UpsertEmailTemplateRequest creates or replaces the template for EventType.
+// SubjectTemplate and HTMLBodyTemplate are required; a nil IsEnabled means enabled.
+type UpsertEmailTemplateRequest struct {
+	EventType        TrackingEmailEvent `json:"eventType"`
+	SubjectTemplate  string             `json:"subjectTemplate"`
+	HTMLBodyTemplate string             `json:"htmlBodyTemplate"`
+	IsEnabled        *bool              `json:"isEnabled,omitempty"`
+}
+
+// PreviewEmailTemplateRequest is a subject and HTML body to render. Both are required.
+type PreviewEmailTemplateRequest struct {
+	SubjectTemplate  string `json:"subjectTemplate"`
+	HTMLBodyTemplate string `json:"htmlBodyTemplate"`
+}
+
+// EmailTemplatePreview is a rendered template.
+type EmailTemplatePreview struct {
+	RenderedSubject  string `json:"renderedSubject"`
+	RenderedHTMLBody string `json:"renderedHtmlBody"`
 }

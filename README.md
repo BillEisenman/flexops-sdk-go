@@ -5,7 +5,7 @@ Official Go SDK for the [FlexOps](https://flexops.io) multi-carrier shipping pla
 ## Installation
 
 ```bash
-go get github.com/BillEisenman/flexops-sdk-go/v2
+go get github.com/BillEisenman/flexops-sdk-go/v3
 ```
 
 ## Quick Start
@@ -18,7 +18,7 @@ import (
     "fmt"
     "log"
 
-    flexops "github.com/BillEisenman/flexops-sdk-go/v2"
+    flexops "github.com/BillEisenman/flexops-sdk-go/v3"
 )
 
 func main() {
@@ -111,10 +111,15 @@ client := flexops.NewClient(flexops.Config{
 
 ```go
 client := flexops.NewClient(flexops.Config{BaseURL: "https://gateway.flexops.io"})
-if err := client.Auth.Login(ctx, "user@example.com", "password"); err != nil {
+login, err := client.Auth.Login(ctx, "user@example.com", "password")
+if err != nil {
     log.Fatal(err)
 }
+// The client now sends login.Data.Token as its bearer token.
 client.WorkspaceID = "ws_abc123"
+
+// Later, exchange the current token and its refresh token for new ones.
+_, err = client.Auth.RefreshToken(ctx, login.Data.RefreshToken)
 ```
 
 ## Sandbox / test keys
@@ -128,27 +133,35 @@ client := flexops.NewClient(flexops.Config{
 })
 ```
 
-## Direct carrier operations
+## Carrier-specific calls (legacy proxy)
 
-Access carrier-specific endpoints when you need full control. The carrier-specific services are typed:
+`client.Carriers.USPS`, `UPS`, `FedEx` and `DHL` call carrier APIs through the deprecated legacy proxy (`/api/ApiProxy`, sunset 2027-06-30).
+
+- **Lookups (GET)** work with API keys: `USPS.CityStateLookup`, `USPS.TrackSummary`, `UPS.Track`, `DHL.FindServicePoints`, ... They take the carrier route's query parameters as a `map[string]string`.
+- **Writes** (POST/PUT/DELETE, such as `USPS.GetDomesticRates` or `FedEx.CreatePickup`) are deprecated. They need a user token (`client.Auth.Login`); API keys get 403 `API_KEY_SCOPE_REQUIRED`. They stop working when the proxy is retired.
+- **Proxy label purchases are closed** (the Gateway answers 410) and are not in the SDK.
+
+Native replacements: rates and labels with `client.Shipping` (`GetRates`, `CreateLabel`, `CancelLabel`), pickups with `client.Pickups`, scan forms with `client.ScanForms`, and landed cost with `client.HsCodes`.
 
 ```go
-// USPS domestic label
-label, err := client.Carriers.USPS.CreateDomesticLabel(ctx, flexops.UspsLabelRequest{
-    ImageType:      "PDF",
-    MailClass:      "PRIORITY_MAIL",
-    WeightInOunces: 16,
-})
-
-// FedEx rate quote
-rates, err := client.Carriers.FedEx.GetRates(ctx, flexops.FedExRateRequest{...})
-
-// UPS tracking
-info, err := client.Carriers.UPS.Track(ctx, "1Z999AA10123456784")
-
-// DHL shipment
-shipment, err := client.Carriers.DHL.CreateShipment(ctx, flexops.DhlShipmentRequest{...})
+// USPS city/state for a ZIP code (works with an API key)
+place, err := client.Carriers.USPS.CityStateLookup(ctx, "10001")
 ```
+
+## Retries and idempotency
+
+GETs retry on network errors, timeouts, 429 and 500/502/503/504. Every POST, PUT and PATCH sends an `Idempotency-Key` header, reused on each retry of that call, so the Gateway replays a write it already finished instead of running it (and charging the wallet) again. Writes retry only on network errors, timeouts, 429, 502/503/504 and a 409 `IDEMPOTENCY_CONFLICT` (the first request with that key is still running), never on 500. A DELETE retries only on 429. A key reused with a different request body gets 422 `IDEMPOTENCY_KEY_REUSED`, which is not retried.
+
+The SDK generates one key per call. To reconcile an uncertain purchase later, supply and store your own key:
+
+```go
+ctx := flexops.WithIdempotencyKey(context.Background(), "offset-order-1042")
+offset, err := client.CarbonOffsets.Purchase(ctx, flexops.CarbonOffsetPurchaseRequest{
+    TrackingNumber: "9400111899223456789012", WeightLbs: 2, DistanceMiles: 850,
+})
+```
+
+Reuse a key only to retry the same request. `Shipping.CreateLabel` takes its purchase key as an argument.
 
 ## Webhook subscriptions
 
@@ -196,7 +209,7 @@ import (
     "net/http"
     "os"
 
-    flexops "github.com/BillEisenman/flexops-sdk-go/v2"
+    flexops "github.com/BillEisenman/flexops-sdk-go/v3"
 )
 
 func webhookHandler(w http.ResponseWriter, r *http.Request) {
@@ -271,8 +284,8 @@ curl -X POST https://gateway.flexops.io/api/shipping/labels \
 curl https://gateway.flexops.io/api/shipping/track/9400111899223456789012 \
   -H "X-API-Key: fxk_live_..."
 
-# Cancel a label (via the unified carrier-agnostic endpoint)
-curl -X DELETE https://gateway.flexops.io/api/v3.0/shipping/Usps/cancel/9400111899223456789012 \
+# Cancel (void) a label; the carrier code is required
+curl -X DELETE "https://gateway.flexops.io/api/shipping/labels/{labelId}?carrierCode=USPS" \
   -H "X-API-Key: fxk_live_..."
 ```
 
@@ -282,26 +295,27 @@ Use an `fxk_test_...` key instead of `fxk_live_...` to hit the sandbox environme
 
 | Service | Description |
 |---------|-------------|
-| `client.Auth` | Login, register, password management |
-| `client.Workspaces` | Workspace CRUD, membership, branding |
-| `client.Shipping` | Rate shopping, labels, tracking, batch, cancel |
-| `client.Carriers` | USPS, UPS, FedEx, DHL direct endpoints |
-| `client.Webhooks` | Subscription CRUD, signature verification, delivery logs |
-| `client.Wallet` | Balance, transactions, auto-reload |
-| `client.Insurance` | Quotes, purchase, claims (first-party + U-PIC) |
-| `client.Returns` | RMA lifecycle: create, batch, QR codes, photo upload, cost recovery |
-| `client.ApiKeys` | Key creation, rotation, revocation |
+| `client.Auth` | Login, token refresh, logout (user tokens) |
+| `client.Workspaces` | Workspaces and membership (invite, roles, remove) |
+| `client.Shipping` | Rate shopping, labels, tracking, batch, cancel, address validation |
+| `client.Carriers` | USPS, UPS, FedEx, DHL through the legacy proxy (reads; deprecated user-token writes) |
+| `client.Webhooks` | Subscription CRUD, test deliveries, signature verification, delivery logs |
+| `client.Wallet` | Workspace wallet balance |
+| `client.Insurance` | Quotes, policies, claims |
+| `client.Returns` | RMAs: create, list, return labels, receiving |
 | `client.Analytics` | Shipments, orders, carrier performance |
-| `client.Orders` | Order management |
-| `client.Inventory` | Warehouse inventory |
+| `client.Orders` | Order reads |
+| `client.Inventory` | Warehouse inventory reads |
 | `client.Pickups` | Carrier pickup scheduling |
 | `client.ScanForms` | USPS scan forms |
-| `client.Rules` | Shipping automation rules |
-| `client.Offsets` | Carbon offset purchases |
-| `client.HsCodes` | HS code lookup for international customs |
-| `client.RecurringShipments` | Scheduled recurring shipments |
-| `client.EmailTemplates` | Branded post-purchase email templates |
-| `client.Reports` | Report generation and scheduled delivery |
+| `client.Rules` | Shipping automation rules, including dry-run tests |
+| `client.CarbonOffsets` | Carbon offset quotes, purchases and settings |
+| `client.HsCodes` | HS code lookup and landed cost for international customs |
+| `client.RecurringShipments` | Shipments that repeat on a schedule (pause, resume, run now) |
+| `client.ReportSchedules` | Reports emailed on a schedule |
+| `client.EmailTemplates` | Tracking email templates per event, with preview |
+
+`RecurringShipments`, `ReportSchedules` and `EmailTemplates` reads work with any API key. Their writes (including email-template preview) need a user token or an API key granted `recurring-shipments:write`, `report-schedules:write` or `email-templates:write`; other keys get 403 `API_KEY_SCOPE_REQUIRED`. API keys themselves are managed in the FlexOps portal.
 
 ## Configuration
 
@@ -311,7 +325,7 @@ client := flexops.NewClient(flexops.Config{
     APIKey:      "fxk_live_...",           // API key auth
     WorkspaceID: "ws_abc123",              // Default workspace
     Timeout:     30 * time.Second,         // Request timeout
-    MaxRetries:  3,                        // Retry on transient failures
+    MaxRetries:  3,                        // Retries per call (see Retries and idempotency)
 })
 ```
 

@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	flexops "github.com/BillEisenman/flexops-sdk-go/v2"
+	flexops "github.com/BillEisenman/flexops-sdk-go/v3"
 )
 
 // CreateBatchLabelRequest mirrors the Gateway batch body: orders plus package measurements.

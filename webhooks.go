@@ -16,7 +16,6 @@ import (
 type WebhooksService struct{ c *Client }
 
 func (s *WebhooksService) List(ctx context.Context) (ApiResponse[[]WebhookSubscription], error) { return decode[ApiResponse[[]WebhookSubscription]](s.c.http.get(ctx, s.c.wsPath("webhooks"), nil)) }
-func (s *WebhooksService) Get(ctx context.Context, webhookID string) (ApiResponse[WebhookSubscription], error) { return decode[ApiResponse[WebhookSubscription]](s.c.http.get(ctx, s.c.wsPath("webhooks/"+webhookID), nil)) }
 
 // Create creates a webhook subscription. req.Events is sent as the Gateway's
 // comma-separated eventTypes; leave it nil to receive every event. The result's
@@ -80,6 +79,11 @@ func (s *WebhooksService) Update(ctx context.Context, webhookID string, req Upda
 func (s *WebhooksService) Delete(ctx context.Context, webhookID string) error { _, err := s.c.http.del(ctx, s.c.wsPath("webhooks/"+webhookID)); return err }
 func (s *WebhooksService) RotateSecret(ctx context.Context, webhookID string) (ApiResponse[map[string]string], error) { return decode[ApiResponse[map[string]string]](s.c.http.post(ctx, s.c.wsPath("webhooks/"+webhookID+"/rotate-secret"), nil)) }
 func (s *WebhooksService) ListDeliveryLogs(ctx context.Context, webhookID string) (ApiResponse[[]any], error) { return decode[ApiResponse[[]any]](s.c.http.get(ctx, s.c.wsPath("webhooks/"+webhookID+"/deliveries"), nil)) }
+
+// Test sends a test delivery (X-FlexOps-Event "test") to the subscription's URL.
+func (s *WebhooksService) Test(ctx context.Context, webhookID string) (ApiResponse[string], error) {
+	return decode[ApiResponse[string]](s.c.http.post(ctx, s.c.wsPath("webhooks/"+webhookID+"/test"), nil))
+}
 
 var knownWebhookEvents = []WebhookEventType{
 	WebhookEventLabelCreated,
