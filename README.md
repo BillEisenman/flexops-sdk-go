@@ -24,8 +24,8 @@ import (
 func main() {
     // API key authentication (recommended for server-to-server)
     client := flexops.NewClient(flexops.Config{
-        APIKey:      "fxk_live_...",
-        WorkspaceID: "ws_abc123",
+        APIKey:      "live_...",
+        WorkspaceID: "your-workspace-id",
     })
 
     ctx := context.Background()
@@ -102,8 +102,8 @@ separate contracts. The SDK never automatically confirms a preview.
 
 ```go
 client := flexops.NewClient(flexops.Config{
-    APIKey:      "fxk_live_...",
-    WorkspaceID: "ws_abc123",
+    APIKey:      "live_...",
+    WorkspaceID: "your-workspace-id",
 })
 ```
 
@@ -116,7 +116,7 @@ if err != nil {
     log.Fatal(err)
 }
 // The client now sends login.Data.Token as its bearer token.
-client.WorkspaceID = "ws_abc123"
+client.WorkspaceID = "your-workspace-id"
 
 // Later, exchange the current token and its refresh token for new ones.
 _, err = client.Auth.RefreshToken(ctx, login.Data.RefreshToken)
@@ -124,12 +124,12 @@ _, err = client.Auth.RefreshToken(ctx, login.Data.RefreshToken)
 
 ## Sandbox / test keys
 
-Use `fxk_test_...` (instead of `fxk_live_...`) to route to the sandbox environment. Mock carriers respond, nothing hits real carrier APIs, no charges, no real labels. Perfect for CI and integration tests.
+Use `test_...` (instead of `live_...`) to route to the sandbox environment. Mock carriers respond, nothing hits real carrier APIs, no charges, no real labels. Perfect for CI and integration tests.
 
 ```go
 client := flexops.NewClient(flexops.Config{
-    APIKey:      "fxk_test_...",
-    WorkspaceID: "ws_abc123",
+    APIKey:      "test_...",
+    WorkspaceID: "your-workspace-id",
 })
 ```
 
@@ -254,7 +254,7 @@ Every SDK method is a thin wrapper around the FlexOps REST API. If you want to v
 ```bash
 # Shop rates across all connected carriers
 curl -X POST https://gateway.flexops.io/api/shipping/rates \
-  -H "X-API-Key: fxk_live_..." \
+  -H "X-API-Key: live_..." \
   -H "Content-Type: application/json" \
   -d '{
     "origin": {"addressLine1": "123 Main St", "city": "New York", "stateProvince": "NY", "postalCode": "10001", "countryCode": "US"},
@@ -265,7 +265,7 @@ curl -X POST https://gateway.flexops.io/api/shipping/rates \
 # Preview a live label; this does not purchase it.
 # hazmatClassification 0 = not hazardous; required when there is no orderId.
 curl -X POST https://gateway.flexops.io/api/shipping/labels \
-  -H "X-API-Key: fxk_live_..." \
+  -H "X-API-Key: live_..." \
   -H "Content-Type: application/json" \
   -d '{
     "carrierCode": "USPS", "serviceCode": "GROUND_ADVANTAGE",
@@ -282,14 +282,14 @@ curl -X POST https://gateway.flexops.io/api/shipping/labels \
 
 # Track a shipment
 curl https://gateway.flexops.io/api/shipping/track/9400111899223456789012 \
-  -H "X-API-Key: fxk_live_..."
+  -H "X-API-Key: live_..."
 
 # Cancel (void) a label; the carrier code is required
 curl -X DELETE "https://gateway.flexops.io/api/shipping/labels/{labelId}?carrierCode=USPS" \
-  -H "X-API-Key: fxk_live_..."
+  -H "X-API-Key: live_..."
 ```
 
-Use an `fxk_test_...` key instead of `fxk_live_...` to hit the sandbox environment; mock carriers respond, no real charges, no real labels.
+Use a `test_...` key instead of `live_...` to hit the sandbox environment; mock carriers respond, no real charges, no real labels.
 
 ## Services
 
@@ -322,8 +322,8 @@ Use an `fxk_test_...` key instead of `fxk_live_...` to hit the sandbox environme
 ```go
 client := flexops.NewClient(flexops.Config{
     BaseURL:     "https://gateway.flexops.io", // API base URL
-    APIKey:      "fxk_live_...",           // API key auth
-    WorkspaceID: "ws_abc123",              // Default workspace
+    APIKey:      "live_...",               // API key auth
+    WorkspaceID: "your-workspace-id",      // Default workspace
     Timeout:     30 * time.Second,         // Request timeout
     MaxRetries:  3,                        // Retries per call (see Retries and idempotency)
 })
