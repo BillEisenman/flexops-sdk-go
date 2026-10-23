@@ -97,7 +97,11 @@ func (s *ShippingService) PreviewLabelBatch(ctx context.Context, req CreateBatch
 // When none was, the Gateway answers 422 AllPackagesFailed, or 409 OutcomeUnknown when
 // a box's carrier outcome is unknown and a label may exist: both return a
 // *FlexOpsError whose Data holds the per-box results. After OutcomeUnknown, check the
-// order before buying again. HazmatClassification accepts only HazmatNone or nil.
+// order before buying again. MaximumPostageAmount is required: the most the whole
+// shipment may cost in USD. The Gateway refuses to buy any box that would take the total
+// above it (that box reports PriceCeilingExceeded; boxes after the ceiling is used up
+// report PriceCeilingReached), and a request without a valid one is 400 ApprovalRequired.
+// HazmatClassification accepts only HazmatNone or nil.
 //
 // Pass one idempotency key to retry safely across processes (WithIdempotencyKey also
 // works); otherwise one is generated for the call.

@@ -1148,7 +1148,15 @@ type MultiPackageShipmentRequest struct {
 	// for no answer. The Gateway refuses any other class (400 HazmatNotSupported);
 	// buy those labels one at a time with Shipping.CreateLabel.
 	HazmatClassification *HazmatClassification `json:"hazmatClassification,omitempty"`
-	Packages             []MultiPackageDetail  `json:"packages"`
+	// MaximumPostageAmount is the most the whole shipment may cost, in USD: required,
+	// positive, with at most two decimals. It covers the postage of every box. The
+	// Gateway refuses to buy a box that would take the total above it, so you never pay
+	// more: a box priced above what is left reports PriceCeilingExceeded, and once the
+	// amount is used up the remaining boxes report PriceCeilingReached and are not
+	// bought. Boxes already bought stay bought. A zero or invalid value is sent as is
+	// and refused 400 ApprovalRequired.
+	MaximumPostageAmount float64              `json:"maximumPostageAmount"`
+	Packages             []MultiPackageDetail `json:"packages"`
 }
 
 // MultiPackageDetail is one box (the Gateway PackageDetail). Weight is in ounces

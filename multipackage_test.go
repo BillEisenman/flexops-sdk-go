@@ -26,6 +26,7 @@ func TestShipping_CreateMultiPackage_SendsGatewayBodyAndKey(t *testing.T) {
 	insured := 50.0
 	resp, err := client.Shipping.CreateMultiPackage(context.Background(), flexops.MultiPackageShipmentRequest{
 		OrderID: 15563627, CarrierCode: "USPS", ServiceCode: "PRIORITY", HazmatClassification: flexops.HazmatNone.Ptr(),
+		MaximumPostageAmount: 25,
 		Packages: []flexops.MultiPackageDetail{
 			{WeightInOunces: 16, LengthInInches: 10, WidthInInches: 8, HeightInInches: 4, PackageReference: "Box 1 of 2"},
 			{WeightInOunces: 8, LengthInInches: 6, WidthInInches: 6, HeightInInches: 6, InsuranceCoverageRequested: true, InsuredValue: &insured},
@@ -35,7 +36,7 @@ func TestShipping_CreateMultiPackage_SendsGatewayBodyAndKey(t *testing.T) {
 		t.Fatal(err)
 	}
 	expectCalls(t, *calls,
-		`POST /api/shipping/multi-package {"carrierCode":"USPS","hazmatClassification":0,"orderId":15563627,"packages":[`+
+		`POST /api/shipping/multi-package {"carrierCode":"USPS","hazmatClassification":0,"maximumPostageAmount":25,"orderId":15563627,"packages":[`+
 			`{"heightInInches":4,"lengthInInches":10,"packageReference":"Box 1 of 2","weightInOunces":16,"widthInInches":8},`+
 			`{"heightInInches":6,"insuranceCoverageRequested":true,"insuredValue":50,"lengthInInches":6,"weightInOunces":8,"widthInInches":6}],"serviceCode":"PRIORITY"}`,
 	)
@@ -44,6 +45,37 @@ func TestShipping_CreateMultiPackage_SendsGatewayBodyAndKey(t *testing.T) {
 	}
 	if resp.Data.SuccessfulPackages != 2 || len(resp.Data.Labels) != 2 || resp.Data.Labels[1].TrackingNumber != "9400-2" {
 		t.Errorf("response = %+v", resp.Data)
+	}
+}
+
+// The ceiling is required, so an unset (zero) value is sent for the Gateway to refuse with 400
+// ApprovalRequired, never dropped from the body.
+func TestShipping_CreateMultiPackage_AlwaysSendsTheMaximumPostageAmount(t *testing.T) {
+	client, calls := recordingClient(t, map[string]any{"success": true})
+	_, _ = client.Shipping.CreateMultiPackage(context.Background(), flexops.MultiPackageShipmentRequest{
+		OrderID: 1, CarrierCode: "USPS", Packages: []flexops.MultiPackageDetail{{WeightInOunces: 1, LengthInInches: 1, WidthInInches: 1, HeightInInches: 1}},
+	})
+	if got, ok := (*calls)[0].body["maximumPostageAmount"]; !ok || got != float64(0) {
+		t.Errorf("maximumPostageAmount = %v (present=%v), want 0 sent explicitly", got, ok)
+	}
+}
+
+func TestShipping_CreateMultiPackage_RefusedCeilingIsAnErrorAndNotRetried(t *testing.T) {
+	var hits int32
+	client, _ := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&hits, 1)
+		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "errorCode": "ApprovalRequired",
+			"message": "Supply maximumPostageAmount in USD, positive and with at most two decimal places."})
+	}))
+	_, err := client.Shipping.CreateMultiPackage(context.Background(), flexops.MultiPackageShipmentRequest{
+		OrderID: 1, CarrierCode: "USPS", Packages: []flexops.MultiPackageDetail{{WeightInOunces: 1, LengthInInches: 1, WidthInInches: 1, HeightInInches: 1}},
+	})
+	var apiErr *flexops.FlexOpsError
+	if !errors.As(err, &apiErr) || apiErr.StatusCode != http.StatusBadRequest || apiErr.Code != "ApprovalRequired" {
+		t.Fatalf("err = %v, want 400 ApprovalRequired", err)
+	}
+	if n := atomic.LoadInt32(&hits); n != 1 {
+		t.Errorf("sent %d times, want 1", n)
 	}
 }
 
