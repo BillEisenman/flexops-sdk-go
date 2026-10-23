@@ -8,8 +8,9 @@ import (
 
 type ReturnsService struct{ c *Client }
 
-// List returns the workspace's returns, filtered by return date. Unset options are not
-// sent (the Gateway defaults to page 1 of 25).
+// List returns the workspace's received returns, filtered by return date. Unset options
+// are not sent (the Gateway defaults to the last 30 days, page 1 of 25). To list return
+// authorizations, use ListRmas.
 func (s *ReturnsService) List(ctx context.Context, opts ReturnListOptions) (ApiResponse[[]ReturnAuthorization], error) {
 	params := url.Values{}
 	if opts.StartDate != "" {
@@ -27,9 +28,28 @@ func (s *ReturnsService) List(ctx context.Context, opts ReturnListOptions) (ApiR
 	return decode[ApiResponse[[]ReturnAuthorization]](s.c.http.get(ctx, s.c.wsPath("returns"), params))
 }
 
-// Get returns one return by its numeric return ID.
+// Get returns one received return by its numeric return ID (ReturnID on a listed
+// return or an Rma). An RMA number such as "RMA-1001" is not a return ID and matches no
+// Gateway route; use GetRma.
 func (s *ReturnsService) Get(ctx context.Context, returnID string) (ApiResponse[ReturnAuthorization], error) {
 	return decode[ApiResponse[ReturnAuthorization]](s.c.http.get(ctx, s.c.wsPath("returns/"+returnID), nil))
+}
+
+// ListRmas returns the workspace's return authorizations, one page at a time.
+func (s *ReturnsService) ListRmas(ctx context.Context, opts RmaListOptions) (ApiResponse[[]Rma], error) {
+	params := url.Values{}
+	if opts.Page > 0 {
+		params.Set("page", strconv.Itoa(opts.Page))
+	}
+	if opts.PageSize > 0 {
+		params.Set("pageSize", strconv.Itoa(opts.PageSize))
+	}
+	return decode[ApiResponse[[]Rma]](s.c.http.get(ctx, s.c.wsPath("returns/rma"), params))
+}
+
+// GetRma returns one return authorization by its RMA number, for example "RMA-1001".
+func (s *ReturnsService) GetRma(ctx context.Context, rmaNumber string) (ApiResponse[Rma], error) {
+	return decode[ApiResponse[Rma]](s.c.http.get(ctx, s.c.wsPath("returns/rma/"+url.PathEscape(rmaNumber)), nil))
 }
 
 // Create opens an RMA for an existing order (the Gateway answers 201 with the RMA).

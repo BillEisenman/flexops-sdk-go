@@ -8,7 +8,10 @@
 
 package flexops
 
-import "fmt"
+import (
+	"encoding/json"
+	"fmt"
+)
 
 // FlexOpsError represents an API error response.
 type FlexOpsError struct {
@@ -16,6 +19,10 @@ type FlexOpsError struct {
 	Code       string
 	Message    string
 	Errors     []string
+	// Data is the envelope's data on an error reply, when the Gateway sends one. A
+	// multi-package 422 AllPackagesFailed or 409 OutcomeUnknown carries the per-box
+	// results here; unmarshal it into a MultiPackageShipmentResponse.
+	Data json.RawMessage
 }
 
 func (e *FlexOpsError) Error() string {

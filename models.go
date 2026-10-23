@@ -1130,3 +1130,71 @@ type EmailTemplatePreview struct {
 	RenderedSubject  string `json:"renderedSubject"`
 	RenderedHTMLBody string `json:"renderedHtmlBody"`
 }
+
+// MultiPackageShipmentRequest is the Gateway MultiPackageShipmentRequest for
+// Shipping.CreateMultiPackage: one order shipped in 1 to 99 boxes with the same
+// carrier and service. The addresses come from the order.
+type MultiPackageShipmentRequest struct {
+	// OrderID is the order to ship. Required and positive.
+	OrderID     int64  `json:"orderId"`
+	CarrierCode string `json:"carrierCode"`
+	ServiceCode string `json:"serviceCode,omitempty"`
+	// LabelFormat defaults to PDF on the Gateway.
+	LabelFormat string `json:"labelFormat,omitempty"`
+	// ShipDate is an ISO 8601 date; today when empty.
+	ShipDate string `json:"shipDate,omitempty"`
+	// HazmatClassification is what the shipment holds. Multi-package labels cannot
+	// carry HAZMAT yet: set HazmatNone.Ptr() for no dangerous goods, or leave it nil
+	// for no answer. The Gateway refuses any other class (400 HazmatNotSupported);
+	// buy those labels one at a time with Shipping.CreateLabel.
+	HazmatClassification *HazmatClassification `json:"hazmatClassification,omitempty"`
+	Packages             []MultiPackageDetail  `json:"packages"`
+}
+
+// MultiPackageDetail is one box (the Gateway PackageDetail). Weight is in ounces
+// (0.1 to 999999) and each dimension in inches (0.1 to 999); all four are required.
+type MultiPackageDetail struct {
+	WeightInOunces                float64 `json:"weightInOunces"`
+	LengthInInches                float64 `json:"lengthInInches"`
+	WidthInInches                 float64 `json:"widthInInches"`
+	HeightInInches                float64 `json:"heightInInches"`
+	DeliveryConfirmationRequired  bool    `json:"deliveryConfirmationRequired,omitempty"`
+	SignatureConfirmationRequired bool    `json:"signatureConfirmationRequired,omitempty"`
+	InsuranceCoverageRequested    bool    `json:"insuranceCoverageRequested,omitempty"`
+	// InsuredValue is the coverage in USD. It needs InsuranceCoverageRequested; nil
+	// insures the order value.
+	InsuredValue *float64 `json:"insuredValue,omitempty"`
+	// PackageReference is your label for the box, up to 100 characters (for example
+	// "Box 1 of 3").
+	PackageReference string `json:"packageReference,omitempty"`
+}
+
+// MultiPackageShipmentResponse is the Gateway MultiPackageShipmentResponse.
+type MultiPackageShipmentResponse struct {
+	OrderID            int64                     `json:"orderId"`
+	CarrierCode        string                    `json:"carrierCode"`
+	TotalPackages      int                       `json:"totalPackages"`
+	SuccessfulPackages int                       `json:"successfulPackages"`
+	FailedPackages     int                       `json:"failedPackages"`
+	TotalCost          float64                   `json:"totalCost"`
+	Labels             []MultiPackageLabelResult `json:"labels"`
+}
+
+// MultiPackageLabelResult is one box's outcome (the Gateway PackageLabelResult).
+// ErrorCode OutcomeUnknown means a label may exist: check the order before retrying.
+type MultiPackageLabelResult struct {
+	PackageIndex     int      `json:"packageIndex"`
+	PackageReference string   `json:"packageReference,omitempty"`
+	TrackingNumber   string   `json:"trackingNumber,omitempty"`
+	Rate             *float64 `json:"rate,omitempty"`
+	Success          bool     `json:"success"`
+	ErrorMessage     string   `json:"errorMessage,omitempty"`
+	ErrorCode        string   `json:"errorCode,omitempty"`
+}
+
+// RmaListOptions pages Returns.ListRmas. Unset options are not sent (the Gateway
+// defaults to page 1 of 25).
+type RmaListOptions struct {
+	Page     int
+	PageSize int
+}
