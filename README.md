@@ -100,11 +100,15 @@ separate contracts. The SDK never automatically confirms a preview.
 
 One order shipped in several boxes with the same carrier and service; each box gets its own label and a box that
 fails does not stop the others. Multi-package labels cannot carry HAZMAT: set `HazmatNone.Ptr()` or leave it nil.
+`MaximumPostageAmount` is required: the most the whole shipment may cost in USD (positive, at most two decimals). The
+Gateway refuses to buy a box that would take the total above it (`PriceCeilingExceeded`; once the amount is used up
+the remaining boxes report `PriceCeilingReached`), and a request without a valid ceiling is 400 `ApprovalRequired`.
 
 ```go
 shipment, err := client.Shipping.CreateMultiPackage(ctx, flexops.MultiPackageShipmentRequest{
     OrderID: 12345, CarrierCode: "USPS", ServiceCode: "PRIORITY",
     HazmatClassification: flexops.HazmatNone.Ptr(),
+    MaximumPostageAmount: 25, // required: the most the whole shipment may cost, in USD
     Packages: []flexops.MultiPackageDetail{
         {WeightInOunces: 16, LengthInInches: 10, WidthInInches: 8, HeightInInches: 4, PackageReference: "Box 1 of 2"},
         {WeightInOunces: 8, LengthInInches: 6, WidthInInches: 6, HeightInInches: 6, PackageReference: "Box 2 of 2"},
