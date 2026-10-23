@@ -300,7 +300,10 @@ type ReturnLabelOptions struct {
 	// PaymentConfirmed is set when the workspace return-cost policy is CustomerPays
 	// and the customer has paid.
 	PaymentConfirmed bool `json:"paymentConfirmed,omitempty"`
-	// HazmatClassification is what the return holds. Sent only when set.
+	// HazmatClassification is what the return holds. Sent only when set. Return
+	// labels cannot carry HAZMAT yet: set HazmatNone.Ptr() for no dangerous goods,
+	// or leave it nil for no answer. The Gateway refuses any other class (400
+	// HazmatNotSupported).
 	HazmatClassification *HazmatClassification `json:"hazmatClassification,omitempty"`
 	// RateIndicator is the USPS rate indicator for the return label.
 	RateIndicator string `json:"rateIndicator,omitempty"`
@@ -416,7 +419,10 @@ type BatchLabelItem struct {
 	InsuredValue                  *float64 `json:"insuredValue,omitempty"`
 	LabelFormat                   string   `json:"labelFormat,omitempty"`
 	ShipDate                      string   `json:"shipDate,omitempty"`
-	// HazmatClassification is what the parcel holds. Sent only when set.
+	// HazmatClassification is what the parcel holds. Sent only when set. Batch
+	// labels cannot carry HAZMAT yet: set HazmatNone.Ptr() for no dangerous goods,
+	// or leave it nil for no answer. The Gateway refuses any other class (400
+	// HazmatNotSupported); buy HAZMAT labels one at a time with CreateLabel.
 	HazmatClassification *HazmatClassification `json:"hazmatClassification,omitempty"`
 }
 

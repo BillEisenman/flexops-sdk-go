@@ -67,6 +67,7 @@ func (s *ReturnsService) GenerateLabel(ctx context.Context, rmaNumber string) (A
 // GenerateLabelWithOptions generates a return label for an RMA with the package weight
 // and size (WeightOz, LengthIn, WidthIn, HeightIn) and optional fields such as a declared
 // HAZMAT class. Unset fields are not sent; CarrierCode defaults to "usps" on the Gateway.
+// HazmatClassification accepts only HazmatNone or nil (any other class is 400 HazmatNotSupported).
 func (s *ReturnsService) GenerateLabelWithOptions(ctx context.Context, rmaNumber string, opts ReturnLabelOptions) (ApiResponse[any], error) {
 	return decode[ApiResponse[any]](s.c.http.post(ctx, s.c.wsPath("returns/"+rmaNumber+"/label"), opts))
 }
