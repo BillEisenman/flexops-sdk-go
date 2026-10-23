@@ -88,6 +88,30 @@ func (s *ShippingService) PreviewLabelBatch(ctx context.Context, req CreateBatch
 	return decode[ApiResponse[BatchLabelJob]](s.c.http.post(ctx, s.c.wsPath("labels/batch/preview"), req))
 }
 
+// CreateMultiPackage buys labels for one order shipped in 1 to 99 boxes with the same
+// carrier and service (POST /api/shipping/multi-package). Every box's label slot is
+// reserved before any label is bought; a box that fails does not stop the others, and
+// each box reports its own Success, ErrorMessage and ErrorCode.
+//
+// It returns the envelope when at least one label was bought (check FailedPackages).
+// When none was, the Gateway answers 422 AllPackagesFailed, or 409 OutcomeUnknown when
+// a box's carrier outcome is unknown and a label may exist: both return a
+// *FlexOpsError whose Data holds the per-box results. After OutcomeUnknown, check the
+// order before buying again. HazmatClassification accepts only HazmatNone or nil.
+//
+// Pass one idempotency key to retry safely across processes (WithIdempotencyKey also
+// works); otherwise one is generated for the call.
+func (s *ShippingService) CreateMultiPackage(ctx context.Context, req MultiPackageShipmentRequest, idempotencyKey ...string) (ApiResponse[MultiPackageShipmentResponse], error) {
+	if len(idempotencyKey) > 1 {
+		return ApiResponse[MultiPackageShipmentResponse]{}, fmt.Errorf("supply at most one idempotency key")
+	}
+	headers := http.Header{}
+	if len(idempotencyKey) == 1 {
+		headers.Set("Idempotency-Key", idempotencyKey[0])
+	}
+	return decode[ApiResponse[MultiPackageShipmentResponse]](s.c.http.do(ctx, http.MethodPost, "/api/shipping/multi-package", nil, req, headers))
+}
+
 // Deprecated: BatchLabelRequest does not match the Gateway batch body; use CreateLabelBatch.
 func (s *ShippingService) CreateBatch(ctx context.Context, req BatchLabelRequest) (ApiResponse[BatchLabelJob], error) {
 	return decode[ApiResponse[BatchLabelJob]](s.c.http.post(ctx, s.c.wsPath("labels/batch"), req))

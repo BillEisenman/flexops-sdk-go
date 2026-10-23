@@ -96,6 +96,39 @@ unresolved. The ceiling bounds postage authorization, not later adjustments or s
 fees. Sandbox execution bypasses approval; batch, return, and raw carrier routes have
 separate contracts. The SDK never automatically confirms a preview.
 
+### Multi-package labels
+
+One order shipped in several boxes with the same carrier and service; each box gets its own label and a box that
+fails does not stop the others. Multi-package labels cannot carry HAZMAT: set `HazmatNone.Ptr()` or leave it nil.
+
+```go
+shipment, err := client.Shipping.CreateMultiPackage(ctx, flexops.MultiPackageShipmentRequest{
+    OrderID: 12345, CarrierCode: "USPS", ServiceCode: "PRIORITY",
+    HazmatClassification: flexops.HazmatNone.Ptr(),
+    Packages: []flexops.MultiPackageDetail{
+        {WeightInOunces: 16, LengthInInches: 10, WidthInInches: 8, HeightInInches: 4, PackageReference: "Box 1 of 2"},
+        {WeightInOunces: 8, LengthInInches: 6, WidthInInches: 6, HeightInInches: 6, PackageReference: "Box 2 of 2"},
+    },
+}, "order-12345-boxes") // optional Idempotency-Key; reuse it when you retry
+var apiErr *flexops.FlexOpsError
+if errors.As(err, &apiErr) && (apiErr.Code == "AllPackagesFailed" || apiErr.Code == "OutcomeUnknown") {
+    // No label was bought. apiErr.Data holds the per-box results (a MultiPackageShipmentResponse);
+    // after OutcomeUnknown a label may exist, so check the order before buying again.
+} else if err == nil {
+    fmt.Println(shipment.Data.SuccessfulPackages, shipment.Data.FailedPackages)
+}
+```
+
+### Returns
+
+`Returns.Create` opens an RMA; `GetRma` and `ListRmas` read RMAs by RMA number. `Returns.List` and `Returns.Get`
+read *received* returns; `Get` takes the numeric return ID, not an RMA number.
+
+```go
+rma, _ := client.Returns.Create(ctx, flexops.ReturnRequest{OrderID: 12345, Reason: "Damaged", Items: []flexops.ReturnItem{{SKU: "SKU-1", Quantity: 1}}})
+current, _ := client.Returns.GetRma(ctx, rma.Data.RmaNumber)
+```
+
 ## Authentication
 
 ### API key (recommended)
@@ -297,12 +330,12 @@ Use a `test_...` key instead of `live_...` to hit the sandbox environment; mock 
 |---------|-------------|
 | `client.Auth` | Login, token refresh, logout (user tokens) |
 | `client.Workspaces` | Workspaces and membership (invite, roles, remove) |
-| `client.Shipping` | Rate shopping, labels, tracking, batch, cancel, address validation |
+| `client.Shipping` | Rate shopping, labels, multi-package labels, tracking, batch, cancel, address validation |
 | `client.Carriers` | USPS, UPS, FedEx, DHL through the legacy proxy (reads; deprecated user-token writes) |
 | `client.Webhooks` | Subscription CRUD, test deliveries, signature verification, delivery logs |
 | `client.Wallet` | Workspace wallet balance |
 | `client.Insurance` | Quotes, policies, claims |
-| `client.Returns` | RMAs: create, list, return labels, receiving |
+| `client.Returns` | RMAs (create, read, list), return labels, receiving, received returns |
 | `client.Analytics` | Shipments, orders, carrier performance |
 | `client.Orders` | Order reads |
 | `client.Inventory` | Warehouse inventory reads |

@@ -200,10 +200,11 @@ func (h *httpClient) do(ctx context.Context, method, path string, query url.Valu
 		}
 
 		var errBody struct {
-			Code      string   `json:"code"`
-			ErrorCode string   `json:"errorCode"`
-			Message   string   `json:"message"`
-			Errors    []string `json:"errors"`
+			Code      string          `json:"code"`
+			ErrorCode string          `json:"errorCode"`
+			Message   string          `json:"message"`
+			Errors    []string        `json:"errors"`
+			Data      json.RawMessage `json:"data"`
 		}
 		_ = json.Unmarshal(respBody, &errBody)
 		if errBody.ErrorCode != "" {
@@ -217,6 +218,9 @@ func (h *httpClient) do(ctx context.Context, method, path string, query url.Valu
 			errBody.Code = "FORBIDDEN"
 		}
 		apiErr := &FlexOpsError{StatusCode: resp.StatusCode, Code: errBody.Code, Message: msg, Errors: errBody.Errors}
+		if len(errBody.Data) > 0 && string(errBody.Data) != "null" {
+			apiErr.Data = errBody.Data
+		}
 
 		if retryable(method, resp.StatusCode, errBody.Code) {
 			lastErr = apiErr

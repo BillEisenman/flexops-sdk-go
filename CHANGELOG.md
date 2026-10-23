@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `Shipping.CreateMultiPackage(ctx, MultiPackageShipmentRequest, idempotencyKey...)` buys labels for one order shipped in 1 to 99 boxes (`POST /api/shipping/multi-package`), with `MultiPackageShipmentRequest`, `MultiPackageDetail`, `MultiPackageShipmentResponse` and `MultiPackageLabelResult`. `HazmatClassification` accepts only `HazmatNone` or nil; the Gateway refuses any other class with 400 `HazmatNotSupported`.
+- `Returns.GetRma(ctx, rmaNumber)` and `Returns.ListRmas(ctx, RmaListOptions)` read return authorizations (`GET .../returns/rma/{rmaNumber}` and `GET .../returns/rma`). There was no way to read an RMA back after creating it.
+- `FlexOpsError.Data` (`json.RawMessage`) carries the envelope's `data` on an error reply. A multi-package 422 `AllPackagesFailed` or 409 `OutcomeUnknown` puts the per-box results there.
+
+### Fixed
+- `Returns.Get` and `Returns.List` say they read received returns: `Get` takes the numeric return ID, and an RMA number matches no Gateway route. Use `GetRma`.
+
 ## [3.0.0] - 2026-10-19
 
 The SDK now calls only the documented public Gateway API (the Developer Docs OpenAPI). Calls with no Gateway route and portal-only features are removed; the remaining calls send the Gateway's routes, bodies and numeric enums. Carrier writes through the legacy `/api/ApiProxy` are deprecated and need a user token. A contract test checks every public method against the OpenAPI operation list.
