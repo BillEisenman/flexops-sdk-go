@@ -79,11 +79,14 @@ func (s *ShippingService) ValidateAddress(ctx context.Context, req AddressValida
 }
 
 // CreateLabelBatch queues labels for a batch of orders (the Gateway CreateBatchLabelRequest).
+// Each item's HazmatClassification accepts only HazmatNone or nil; the Gateway refuses any
+// other class with 400 HazmatNotSupported.
 func (s *ShippingService) CreateLabelBatch(ctx context.Context, req CreateBatchLabelRequest) (ApiResponse[BatchLabelJob], error) {
 	return decode[ApiResponse[BatchLabelJob]](s.c.http.post(ctx, s.c.wsPath("labels/batch"), req))
 }
 
-// PreviewLabelBatch estimates a batch without creating labels.
+// PreviewLabelBatch estimates a batch without creating labels. Each item's
+// HazmatClassification accepts only HazmatNone or nil, as for CreateLabelBatch.
 func (s *ShippingService) PreviewLabelBatch(ctx context.Context, req CreateBatchLabelRequest) (ApiResponse[BatchLabelJob], error) {
 	return decode[ApiResponse[BatchLabelJob]](s.c.http.post(ctx, s.c.wsPath("labels/batch/preview"), req))
 }
