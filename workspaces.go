@@ -23,6 +23,8 @@ func (s *WorkspacesService) ListMembers(ctx context.Context) (ApiResponse[Member
 }
 
 // InviteMember invites email to the configured workspace with role (sent as its number).
+//
+// Signed-in users only: API keys get 403 SIGNED_IN_USER_REQUIRED, whatever their scopes.
 func (s *WorkspacesService) InviteMember(ctx context.Context, email string, role WorkspaceRole) (ApiResponse[any], error) {
 	body := struct {
 		Email string        `json:"email"`
@@ -30,12 +32,18 @@ func (s *WorkspacesService) InviteMember(ctx context.Context, email string, role
 	}{email, role}
 	return decode[ApiResponse[any]](s.c.http.post(ctx, s.c.wsPath("members/invite"), body))
 }
+
+// RemoveMember removes a member from the configured workspace.
+//
+// Signed-in users only: API keys get 403 SIGNED_IN_USER_REQUIRED, whatever their scopes.
 func (s *WorkspacesService) RemoveMember(ctx context.Context, userID string) error {
 	_, err := s.c.http.del(ctx, s.c.wsPath("members/"+userID))
 	return err
 }
 
 // UpdateMemberRole changes a member's role (sent as the Gateway's newRole number).
+//
+// Signed-in users only: API keys get 403 SIGNED_IN_USER_REQUIRED, whatever their scopes.
 func (s *WorkspacesService) UpdateMemberRole(ctx context.Context, userID string, role WorkspaceRole) (ApiResponse[any], error) {
 	body := struct {
 		NewRole WorkspaceRole `json:"newRole"`

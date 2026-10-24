@@ -821,9 +821,25 @@ type Pickup struct {
 	IsSandbox          bool   `json:"isSandbox"`
 }
 
+// ScanFormRequest is the body of POST /api/workspaces/{workspaceId}/scan-forms.
 type ScanFormRequest struct {
-	Carrier         string   `json:"carrier"`
+	// Deprecated: the Gateway has no carrier field on this request and ignores it. SCAN forms are USPS.
+	Carrier string `json:"carrier,omitempty"`
+	// TrackingNumbers are the labels to put on the form: 1 to 1,000.
 	TrackingNumbers []string `json:"trackingNumbers"`
+	// ManifestDate is the labels' mailing date, "YYYY-MM-DD". Live creation needs it: without
+	// it the Gateway answers 400 "Choose the label mailing date." The sandbox defaults it to
+	// today (UTC), which is why it is optional here.
+	ManifestDate string `json:"manifestDate,omitempty"`
+	// RequestID identifies the operation (a UUID). Repeating a request with the same ID returns
+	// the same form instead of creating another; reusing it with different inputs is 409. When
+	// empty, ScanFormsService.Create generates one for the call and sends it on every retry of
+	// it. Set it yourself to retry the call after an unknown outcome.
+	RequestID string `json:"requestId,omitempty"`
+	// OriginPostalCode is the origin ZIP group to manifest. Every selected package must ship from it.
+	OriginPostalCode string `json:"originPostalCode,omitempty"`
+	// WarehouseID limits package selection to one warehouse.
+	WarehouseID *int `json:"warehouseId,omitempty"`
 }
 
 type ScanForm struct {
