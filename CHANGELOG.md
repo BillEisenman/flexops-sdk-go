@@ -28,6 +28,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Before, it sent none, so the Gateway gave each attempt a new ID and a retry after a lost response could create a
   second form. Repeating a request with the same `requestId` returns the same form; reusing it with different
   inputs is 409.
+- `ScanForm` now reads what the Gateway returns from `ScanForms.Create`, `List` and `Get`: `ScanFormID`, `State`
+  (`ScanFormStateCreated` or `ScanFormStateOutcomeUnknown`), `OriginPostalCode`, `TrackingNumbers`, `CreatedAtUTC`,
+  `ScanFormImage` (the base64 PDF, `""` for sandbox forms and unresolved operations; `PDF()` decodes it),
+  `ManifestNumber`, `ManifestDate`, `PackageCount`, `StatusMessage`, `Success`, `ErrorMessage` and `IsSandbox`, with
+  `Created()`. Before, it declared `ID`, `Carrier`, `FormURL` and `CreatedAt`, none of which the Gateway sends, so
+  every field was empty. They stay, deprecated: `ID` and `CreatedAt` are now filled from `scanFormId` and the
+  `createdAtUtc` text; `Carrier` and `FormURL` stay empty (SCAN forms are USPS, and the PDF is in `ScanFormImage`).
+  No breaking change.
+- Docs: `ScanForms.Create` returns a 409 `*FlexOpsError` when the `RequestID` was used with different inputs, when the
+  packages already belong to a manifest, or when an operation needs review (its message names the operation). These
+  are not retried.
 
 ## [3.2.0] - 2026-10-22
 

@@ -8,6 +8,12 @@
 
 package flexops
 
+import (
+	"encoding/base64"
+	"encoding/json"
+	"time"
+)
+
 // ApiResponse is the standard API response wrapper.
 type ApiResponse[T any] struct {
 	Success bool     `json:"success"`
@@ -842,11 +848,94 @@ type ScanFormRequest struct {
 	WarehouseID *int `json:"warehouseId,omitempty"`
 }
 
+// SCAN form states (ScanForm.State). The Gateway may add others; treat them like
+// ScanFormStateOutcomeUnknown.
+const (
+	// ScanFormStateCreated: USPS returned the manifest, and the Gateway saved its number and PDF.
+	ScanFormStateCreated = "Created"
+	// ScanFormStateOutcomeUnknown: the carrier's answer was lost or did not match. The packages
+	// stay reserved: do not submit them again until the outcome is resolved.
+	ScanFormStateOutcomeUnknown = "OutcomeUnknown"
+)
+
+// ScanForm is a SCAN form (USPS PS Form 5630 manifest) as the Gateway returns it from
+// ScanFormsService.Create, List and Get (the Gateway's ScanFormDto). Create returns one only for
+// a created form: a requestId reused with different inputs, packages already on a manifest, or
+// an operation that needs review are a 409 *FlexOpsError.
 type ScanForm struct {
-	ID        string `json:"id"`
-	Carrier   string `json:"carrier"`
-	FormURL   string `json:"formUrl"`
+	// ScanFormID is the form's ID: 32 hexadecimal digits, no dashes. Pass it to Get.
+	ScanFormID string `json:"scanFormId"`
+	// State is ScanFormStateCreated or ScanFormStateOutcomeUnknown.
+	State string `json:"state"`
+	// OriginPostalCode is the origin ZIP the packages ship from, or "" when none was recorded.
+	OriginPostalCode string `json:"originPostalCode"`
+	// TrackingNumbers are the packages on the form.
+	TrackingNumbers []string `json:"trackingNumbers"`
+	// CreatedAtUTC is when the operation was recorded.
+	CreatedAtUTC time.Time `json:"createdAtUtc"`
+	// ScanFormImage is the PS Form 5630 PDF, base64-encoded, or "" when no PDF was saved:
+	// sandbox forms are never sent to USPS, and an operation whose outcome is unknown has none.
+	// PDF decodes it.
+	ScanFormImage string `json:"scanFormImage"`
+	// ManifestNumber is the USPS manifest number: "SBOX..." in the sandbox, "" while the outcome
+	// is unknown.
+	ManifestNumber string `json:"manifestNumber"`
+	// ManifestDate is the mailing date as the Gateway writes a date without a zone, for example
+	// "2026-09-08T00:00:00".
+	ManifestDate string `json:"manifestDate"`
+	// PackageCount is how many packages the form covers.
+	PackageCount int `json:"packageCount"`
+	// StatusMessage is a status line for people.
+	StatusMessage string `json:"statusMessage"`
+	// Success is true when State is ScanFormStateCreated.
+	Success bool `json:"success"`
+	// ErrorMessage is not set by the current Gateway; a refused request returns *FlexOpsError.
+	ErrorMessage string `json:"errorMessage"`
+	// IsSandbox is true for a sandbox (test key) form, which is never transmitted to USPS.
+	IsSandbox bool `json:"isSandbox"`
+
+	// Deprecated: the Gateway never sent "id". It is now filled from ScanFormID; use ScanFormID.
+	ID string `json:"id"`
+	// Deprecated: the Gateway never sent "carrier", and SCAN forms are USPS. Always "".
+	Carrier string `json:"carrier"`
+	// Deprecated: the Gateway never sent "formUrl" and has no URL for the form; the PDF is in
+	// ScanFormImage. Always "".
+	FormURL string `json:"formUrl"`
+	// Deprecated: the Gateway never sent "createdAt". It is now filled with the createdAtUtc
+	// text; use CreatedAtUTC.
 	CreatedAt string `json:"createdAt"`
+}
+
+// UnmarshalJSON reads the Gateway's ScanFormDto and fills the deprecated ID and CreatedAt.
+func (f *ScanForm) UnmarshalJSON(data []byte) error {
+	type plain ScanForm
+	if err := json.Unmarshal(data, (*plain)(f)); err != nil {
+		return err
+	}
+	var created struct {
+		Text string `json:"createdAtUtc"`
+	}
+	if err := json.Unmarshal(data, &created); err != nil {
+		return err
+	}
+	if f.ID == "" {
+		f.ID = f.ScanFormID
+	}
+	if f.CreatedAt == "" {
+		f.CreatedAt = created.Text
+	}
+	return nil
+}
+
+// Created reports whether the form's State is ScanFormStateCreated.
+func (f ScanForm) Created() bool { return f.State == ScanFormStateCreated }
+
+// PDF decodes ScanFormImage, or returns nil when the form has no PDF.
+func (f ScanForm) PDF() ([]byte, error) {
+	if f.ScanFormImage == "" {
+		return nil, nil
+	}
+	return base64.StdEncoding.DecodeString(f.ScanFormImage)
 }
 
 type CarrierRecommendationRequest struct {
