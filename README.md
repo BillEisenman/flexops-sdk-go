@@ -202,7 +202,15 @@ Reuse a key only to retry the same request. `Shipping.CreateLabel` takes its pur
 
 ## Webhook subscriptions
 
+Managing webhooks needs a signed-in user's access token. The Gateway refuses API keys on every webhook route, reads included (`List` and `ListDeliveryLogs` as well as `Create`, `Update`, `Delete`, `RotateSecret` and `Test`), with 403 `SIGNED_IN_USER_REQUIRED`, whatever the key's scopes; the SDK returns a `*FlexOpsError` with that `Code`. Reads are refused too because webhook delivery logs carry each delivery's payload (order and customer data). A client with an API key sends the key even when an access token is also set, so use a client created without `APIKey`. Verifying deliveries (below) makes no request and needs no credentials.
+
 ```go
+// Sign in as a user (or set Config.AccessToken); an API key gets 403 SIGNED_IN_USER_REQUIRED here.
+client := flexops.NewClient(flexops.Config{WorkspaceID: "your-workspace-id"})
+if _, err := client.Auth.Login(ctx, "user@example.com", "password"); err != nil {
+    log.Fatal(err)
+}
+
 // Leave Events nil to receive every event.
 webhook, err := client.Webhooks.Create(ctx, flexops.CreateWebhookRequest{
     URL: "https://your-app.com/webhooks/flexops",

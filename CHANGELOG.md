@@ -11,6 +11,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Docs: `BatchLabelItem`, `CreateLabelBatch`, `PreviewLabelBatch`, `ReturnLabelOptions` and
   `GenerateLabelWithOptions` now say that `HazmatClassification` accepts only `HazmatNone` (0) or nil; the Gateway
   refuses any other class with 400 `HazmatNotSupported`. No behavior change.
+- Docs: every `WebhooksService` method that calls the Gateway (`List`, `Create`, `Update`, `Delete`, `RotateSecret`,
+  `ListDeliveryLogs` and `Test`), the service, the `Client.Webhooks` field and the README now say it needs a
+  signed-in user's access token. The Gateway refuses API keys on every webhook route, reads included, with 403
+  `SIGNED_IN_USER_REQUIRED` (`*FlexOpsError`), whatever the key's scopes; reads are refused because webhook
+  delivery logs carry each delivery's payload (order and customer data). A client with an API key sends the key
+  even when an access token is set. The README webhook example now signs in first. `VerifyWebhookSignature` needs
+  no credentials. No behavior change.
 
 ## [3.2.0] - 2026-10-22
 
