@@ -174,14 +174,14 @@ client := flexops.NewClient(flexops.Config{
 
 `client.Carriers.USPS`, `UPS`, `FedEx` and `DHL` call carrier APIs through the deprecated legacy proxy (`/api/ApiProxy`, sunset 2027-06-30).
 
-- **Lookups (GET)** work with API keys: `USPS.CityStateLookup`, `USPS.TrackSummary`, `UPS.Track`, `DHL.FindServicePoints`, ... They take the carrier route's query parameters as a `map[string]string`.
+- **Lookups (GET)** work with API keys: `USPS.CityStateLookup`, `USPS.TrackSummary`, `UPS.Track`, `DHL.FindServicePoints`, ... They take the carrier route's query parameters as a `map[string]string`. The key needs the permission for the data: `shipping:read` for address, ZIP, city, location, service point and reference lookups; `tracking:read` for tracking and proof of delivery; `rates:read` for delivery standards, rates and products. Without it the Gateway returns 403 `API_KEY_SCOPE_REQUIRED`.
 - **Writes** (POST/PUT/DELETE, such as `USPS.GetDomesticRates` or `FedEx.CreatePickup`) are deprecated. They need a user token (`client.Auth.Login`); API keys get 403 `API_KEY_SCOPE_REQUIRED`. They stop working when the proxy is retired.
 - **Proxy label purchases are closed** (the Gateway answers 410) and are not in the SDK.
 
 Native replacements: rates and labels with `client.Shipping` (`GetRates`, `CreateLabel`, `CancelLabel`), pickups with `client.Pickups`, scan forms with `client.ScanForms`, and landed cost with `client.HsCodes`.
 
 ```go
-// USPS city/state for a ZIP code (works with an API key)
+// USPS city/state for a ZIP code (works with an API key that has shipping:read)
 place, err := client.Carriers.USPS.CityStateLookup(ctx, "10001")
 ```
 
@@ -340,9 +340,9 @@ Use a `test_...` key instead of `live_...` to hit the sandbox environment; mock 
 | `client.Wallet` | Workspace wallet balance |
 | `client.Insurance` | Quotes, policies, claims |
 | `client.Returns` | RMAs (create, read, list), return labels, receiving, received returns |
-| `client.Analytics` | Shipments, orders, carrier performance |
-| `client.Orders` | Order reads |
-| `client.Inventory` | Warehouse inventory reads |
+| `client.Analytics` | Shipments, orders, carrier performance (API keys need each method's read permission) |
+| `client.Orders` | Order reads (API keys need `orders:read`) |
+| `client.Inventory` | Warehouse inventory reads (API keys need `inventory:read`) |
 | `client.Pickups` | Carrier pickup scheduling |
 | `client.ScanForms` | USPS scan forms |
 | `client.Rules` | Shipping automation rules, including dry-run tests |
@@ -351,6 +351,8 @@ Use a `test_...` key instead of `live_...` to hit the sandbox environment; mock 
 | `client.RecurringShipments` | Shipments that repeat on a schedule (pause, resume, run now) |
 | `client.ReportSchedules` | Reports emailed on a schedule |
 | `client.EmailTemplates` | Tracking email templates per event, with preview |
+
+`Analytics`, `Orders` and `Inventory` read through the legacy proxy. With an API key they need the permission for the data they read: `orders:read` for `Orders`, `inventory:read` for `Inventory`, and for `Analytics` the permission named on each method (`shipping:read`, `inventory:read`, `orders:read` or `returns:read`). A key without it gets 403 `API_KEY_SCOPE_REQUIRED`. Keys created with the default permissions have all of these.
 
 `RecurringShipments`, `ReportSchedules` and `EmailTemplates` reads work with any API key. Their writes (including email-template preview) need a user token or an API key granted `recurring-shipments:write`, `report-schedules:write` or `email-templates:write`; other keys get 403 `API_KEY_SCOPE_REQUIRED`. API keys themselves are managed in the FlexOps portal.
 
