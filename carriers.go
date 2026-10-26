@@ -5,7 +5,12 @@ import "context"
 const proxyBase = "/api/ApiProxy"
 
 // CarriersService reaches carrier APIs through the deprecated legacy proxy
-// (/api/ApiProxy, sunset 2027-06-30). Reads (GET) work with API keys. Writes are
+// (/api/ApiProxy, sunset 2027-06-30). Reads (GET) work with API keys that have the
+// permission for the data they read: address, ZIP, city, location, service point and
+// reference lookups require shipping:read; tracking and proof of delivery require
+// tracking:read; delivery standards, rates and products require rates:read. A key
+// without the permission gets 403 API_KEY_SCOPE_REQUIRED; keys created with the default
+// permissions have all three. Writes are
 // deprecated and need a user token (Auth.Login): API keys get 403 API_KEY_SCOPE_REQUIRED.
 // Label purchases through the proxy are closed (410); use client.Shipping,
 // client.Pickups and client.ScanForms where they cover a write.
@@ -28,6 +33,10 @@ func newCarriersService(c *Client) *CarriersService {
 }
 
 // --- USPS ---
+
+// UspsService calls USPS through the legacy proxy. With an API key, the address, ZIP,
+// city and location lookups require shipping:read, tracking requires tracking:read and
+// delivery standards require rates:read.
 type UspsService struct{ c *Client }
 
 func (s *UspsService) p(path string) string { return proxyBase + path }
