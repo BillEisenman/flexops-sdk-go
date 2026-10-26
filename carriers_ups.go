@@ -5,6 +5,8 @@ import (
 	"net/url"
 )
 
+// UpsService calls UPS through the legacy proxy. With an API key, Track requires
+// tracking:read.
 type UpsService struct{ c *Client }
 
 func (s *UpsService) p(path string) string { return proxyBase + path }

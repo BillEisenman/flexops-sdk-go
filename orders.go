@@ -7,6 +7,10 @@ import (
 
 // OrdersService reads orders through the legacy proxy. The proxy refuses API-key
 // writes, so it has no create or cancel.
+//
+// With an API key, every method requires the orders:read permission; a key without it
+// gets 403 API_KEY_SCOPE_REQUIRED. Keys created with the default permissions include
+// orders:read.
 type OrdersService struct{ c *Client }
 
 const ordersBase = "/api/ApiProxy/api/v1/Order"
