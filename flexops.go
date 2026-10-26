@@ -25,11 +25,12 @@ type Config struct {
 
 // Client is the main entry point for the FlexOps SDK.
 type Client struct {
-	WorkspaceID   string
-	Auth          *AuthService
-	Workspaces    *WorkspacesService
-	Shipping      *ShippingService
-	Carriers      *CarriersService
+	WorkspaceID string
+	Auth        *AuthService
+	Workspaces  *WorkspacesService
+	Shipping    *ShippingService
+	Carriers    *CarriersService
+	// Webhooks needs a signed-in user's access token; API keys get 403 SIGNED_IN_USER_REQUIRED.
 	Webhooks      *WebhooksService
 	Wallet        *WalletService
 	Insurance     *InsuranceService

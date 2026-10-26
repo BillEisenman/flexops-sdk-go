@@ -13,8 +13,24 @@ import (
 	"time"
 )
 
+// WebhooksService manages webhook subscriptions and verifies deliveries.
+//
+// Every method needs a signed-in user's access token (Config.AccessToken,
+// Client.SetAccessToken or Client.Auth.Login). The Gateway refuses API keys on
+// every webhook route, reads included, with 403 SIGNED_IN_USER_REQUIRED, whatever
+// the key's scopes; the methods return a *FlexOpsError with that Code. Reads are
+// refused too because webhook delivery logs carry each delivery's payload (order
+// and customer data). A client with an API key sends the key even when an access
+// token is also set, so call these methods from a client created without
+// Config.APIKey. VerifyWebhookSignature makes no request and needs no credentials.
 type WebhooksService struct{ c *Client }
 
+// List returns the workspace's webhook subscriptions.
+//
+// It needs a signed-in user's access token. With an API key the Gateway answers
+// 403 and it returns a *FlexOpsError with Code "SIGNED_IN_USER_REQUIRED".
+// Reads are signed-in only, like the writes, because webhook delivery logs carry
+// each delivery's payload (order and customer data).
 func (s *WebhooksService) List(ctx context.Context) (ApiResponse[[]WebhookSubscription], error) { return decode[ApiResponse[[]WebhookSubscription]](s.c.http.get(ctx, s.c.wsPath("webhooks"), nil)) }
 
 // Create creates a webhook subscription. req.Events is sent as the Gateway's
@@ -25,6 +41,9 @@ func (s *WebhooksService) List(ctx context.Context) (ApiResponse[[]WebhookSubscr
 //
 // It returns a *FlexOpsError with Code "UnknownWebhookEvent", before any request,
 // when req.Events is empty but non-nil or names an event FlexOps does not send.
+//
+// It needs a signed-in user's access token. With an API key the Gateway answers
+// 403 and it returns a *FlexOpsError with Code "SIGNED_IN_USER_REQUIRED".
 func (s *WebhooksService) Create(ctx context.Context, req CreateWebhookRequest) (ApiResponse[WebhookSubscription], error) {
 	eventTypes, err := webhookEventTypes(req.Events)
 	if err != nil {
@@ -62,6 +81,9 @@ func decodeCreatedWebhook(data []byte, err error) (ApiResponse[WebhookSubscripti
 //
 // It returns a *FlexOpsError with Code "UnknownWebhookEvent", before any request,
 // when req.Events is empty but non-nil or names an event FlexOps does not send.
+//
+// It needs a signed-in user's access token. With an API key the Gateway answers
+// 403 and it returns a *FlexOpsError with Code "SIGNED_IN_USER_REQUIRED".
 func (s *WebhooksService) Update(ctx context.Context, webhookID string, req UpdateWebhookRequest) (ApiResponse[WebhookSubscription], error) {
 	eventTypes, err := webhookEventTypes(req.Events)
 	if err != nil {
@@ -76,11 +98,30 @@ func (s *WebhooksService) Update(ctx context.Context, webhookID string, req Upda
 	return decode[ApiResponse[WebhookSubscription]](s.c.http.put(ctx, s.c.wsPath("webhooks/"+webhookID), body))
 }
 
+// Delete deletes a webhook subscription.
+//
+// It needs a signed-in user's access token. With an API key the Gateway answers
+// 403 and it returns a *FlexOpsError with Code "SIGNED_IN_USER_REQUIRED".
 func (s *WebhooksService) Delete(ctx context.Context, webhookID string) error { _, err := s.c.http.del(ctx, s.c.wsPath("webhooks/"+webhookID)); return err }
+
+// RotateSecret replaces the subscription's signing secret and returns the new one.
+//
+// It needs a signed-in user's access token. With an API key the Gateway answers
+// 403 and it returns a *FlexOpsError with Code "SIGNED_IN_USER_REQUIRED".
 func (s *WebhooksService) RotateSecret(ctx context.Context, webhookID string) (ApiResponse[map[string]string], error) { return decode[ApiResponse[map[string]string]](s.c.http.post(ctx, s.c.wsPath("webhooks/"+webhookID+"/rotate-secret"), nil)) }
+
+// ListDeliveryLogs returns the subscription's delivery logs.
+//
+// It needs a signed-in user's access token. With an API key the Gateway answers
+// 403 and it returns a *FlexOpsError with Code "SIGNED_IN_USER_REQUIRED".
+// Reads are signed-in only, like the writes, because webhook delivery logs carry
+// each delivery's payload (order and customer data).
 func (s *WebhooksService) ListDeliveryLogs(ctx context.Context, webhookID string) (ApiResponse[[]any], error) { return decode[ApiResponse[[]any]](s.c.http.get(ctx, s.c.wsPath("webhooks/"+webhookID+"/deliveries"), nil)) }
 
 // Test sends a test delivery (X-FlexOps-Event "test") to the subscription's URL.
+//
+// It needs a signed-in user's access token. With an API key the Gateway answers
+// 403 and it returns a *FlexOpsError with Code "SIGNED_IN_USER_REQUIRED".
 func (s *WebhooksService) Test(ctx context.Context, webhookID string) (ApiResponse[string], error) {
 	return decode[ApiResponse[string]](s.c.http.post(ctx, s.c.wsPath("webhooks/"+webhookID+"/test"), nil))
 }
