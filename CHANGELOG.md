@@ -7,7 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `ScanFormRequest` has `ManifestDate` (`"YYYY-MM-DD"`), `RequestID`, `OriginPostalCode` and `WarehouseID`, the fields
+  of the Gateway's SCAN form request. Live creation needs `ManifestDate`: without it the Gateway answers 400
+  `Choose the label mailing date.` It stays optional because the sandbox defaults it to today.
+
 ### Changed
+- `ScanFormRequest.Carrier` is deprecated and sent only when set (`omitempty`): the Gateway has no carrier field on this
+  request and ignores it.
+- Docs: `Pickups.Schedule`/`Cancel` and `ScanForms.Create` need `shipping:write` with an API key, and the public demo
+  keys cannot use them. `Rules.Test` needs `shipping:read`. Shipping rule changes (`Rules.Create`, `Update`, `Delete`,
+  `Reorder`) and member changes (`Workspaces.InviteMember`, `RemoveMember`, `UpdateMemberRole`) are for signed-in
+  users only: API keys get 403 `SIGNED_IN_USER_REQUIRED`.
 - Docs: `BatchLabelItem`, `CreateLabelBatch`, `PreviewLabelBatch`, `ReturnLabelOptions` and
   `GenerateLabelWithOptions` now say that `HazmatClassification` accepts only `HazmatNone` (0) or nil; the Gateway
   refuses any other class with 400 `HazmatNotSupported`. No behavior change.
@@ -18,6 +29,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   delivery logs carry each delivery's payload (order and customer data). A client with an API key sends the key
   even when an access token is set. The README webhook example now signs in first. `VerifyWebhookSignature` needs
   no credentials. No behavior change.
+
+### Fixed
+- `ScanForms.Create` sends a `requestId`: yours, or a UUID generated for the call and sent on every retry of it.
+  Before, it sent none, so the Gateway gave each attempt a new ID and a retry after a lost response could create a
+  second form. Repeating a request with the same `requestId` returns the same form; reusing it with different
+  inputs is 409.
+- `ScanForm` now reads what the Gateway returns from `ScanForms.Create`, `List` and `Get`: `ScanFormID`, `State`
+  (`ScanFormStateCreated` or `ScanFormStateOutcomeUnknown`), `OriginPostalCode`, `TrackingNumbers`, `CreatedAtUTC`,
+  `ScanFormImage` (the base64 PDF, `""` for sandbox forms and unresolved operations; `PDF()` decodes it),
+  `ManifestNumber`, `ManifestDate`, `PackageCount`, `StatusMessage`, `Success`, `ErrorMessage` and `IsSandbox`, with
+  `Created()`. Before, it declared `ID`, `Carrier`, `FormURL` and `CreatedAt`, none of which the Gateway sends, so
+  every field was empty. They stay, deprecated: `ID` and `CreatedAt` are now filled from `scanFormId` and the
+  `createdAtUtc` text; `Carrier` and `FormURL` stay empty (SCAN forms are USPS, and the PDF is in `ScanFormImage`).
+  No breaking change.
+- Docs: `ScanForms.Create` returns a 409 `*FlexOpsError` when the `RequestID` was used with different inputs, when the
+  packages already belong to a manifest, or when an operation needs review (its message names the operation). These
+  are not retried.
 
 ## [3.2.0] - 2026-10-22
 

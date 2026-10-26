@@ -2,6 +2,9 @@ package flexops
 
 import "context"
 
+// DhlService calls DHL through the legacy proxy. With an API key, address validation,
+// service points and reference data require shipping:read; tracking and proof of
+// delivery require tracking:read; rates and products require rates:read.
 type DhlService struct{ c *Client }
 
 func (s *DhlService) p(path string) string { return proxyBase + path }
