@@ -1,6 +1,10 @@
 package flexops
 
-import "context"
+import (
+	"context"
+	"fmt"
+	"strings"
+)
 
 const proxyBase = "/api/ApiProxy"
 
@@ -41,6 +45,15 @@ type UspsService struct{ c *Client }
 
 func (s *UspsService) p(path string) string { return proxyBase + path }
 
+// cancel sends a USPS cancel with what it cancels in the query string; without it VSCS answers 400.
+func (s *UspsService) cancel(ctx context.Context, method, what, path, param, value string) error {
+	if strings.TrimSpace(value) == "" {
+		return fmt.Errorf("flexops: %s needs %s", method, what)
+	}
+	_, err := s.c.http.delQuery(ctx, s.p(path), toValues(map[string]string{param: value}))
+	return err
+}
+
 func (s *UspsService) ValidateAddress(ctx context.Context, params map[string]string) (any, error) { return decode[any](s.c.http.get(ctx, s.p("/api/v3/AddressValidation/getUspsValidateAndCorrectAddress"), toValues(params))) }
 func (s *UspsService) CityStateLookup(ctx context.Context, zipCode string) (any, error) { return decode[any](s.c.http.get(ctx, s.p("/api/v3/AddressValidation/getUspsCityStateLookupByZipCode"), toValues(map[string]string{"zipCode": zipCode}))) }
 func (s *UspsService) ZipCodeLookup(ctx context.Context, params map[string]string) (any, error) { return decode[any](s.c.http.get(ctx, s.p("/api/v3/AddressValidation/getUspsZipCodeLookupByAddress"), toValues(params))) }
@@ -55,15 +68,21 @@ func (s *UspsService) GetInternationalRates(ctx context.Context, body any) (any,
 // Deprecated: Legacy carrier proxy (sunset 2027-06-30). Needs a user token: API keys get 403 API_KEY_SCOPE_REQUIRED. Use client.Shipping / client.Pickups / client.ScanForms where they cover this.
 func (s *UspsService) GetInternationalPrices(ctx context.Context, body any) (any, error) { return decode[any](s.c.http.post(ctx, s.p("/api/v3/RateCalculator/postUspsSearchEligibleInternationalPrices"), body)) }
 // Deprecated: Legacy carrier proxy (sunset 2027-06-30). Needs a user token: API keys get 403 API_KEY_SCOPE_REQUIRED. Use client.Shipping / client.Pickups / client.ScanForms where they cover this.
-func (s *UspsService) CancelDomesticLabel(ctx context.Context) error { _, err := s.c.http.del(ctx, s.p("/api/v3/Shipping/cancelUspsDomesticShipmentLabel")); return err }
+func (s *UspsService) CancelDomesticLabel(ctx context.Context, trackingNumber string) error {
+	return s.cancel(ctx, "CancelDomesticLabel", "a tracking number", "/api/v3/Shipping/cancelUspsDomesticShipmentLabel", "trackingNumber", trackingNumber)
+}
 // Deprecated: Legacy carrier proxy (sunset 2027-06-30). Needs a user token: API keys get 403 API_KEY_SCOPE_REQUIRED. Use client.Shipping / client.Pickups / client.ScanForms where they cover this.
-func (s *UspsService) CancelInternationalLabel(ctx context.Context) error { _, err := s.c.http.del(ctx, s.p("/api/v3/Shipping/cancelUspsInternationalShipmentLabel")); return err }
+func (s *UspsService) CancelInternationalLabel(ctx context.Context, internationalTrackingNumber string) error {
+	return s.cancel(ctx, "CancelInternationalLabel", "an international tracking number", "/api/v3/Shipping/cancelUspsInternationalShipmentLabel", "internationalTrackingNumber", internationalTrackingNumber)
+}
 func (s *UspsService) TrackSummary(ctx context.Context, params map[string]string) (any, error) { return decode[any](s.c.http.get(ctx, s.p("/api/v3/Tracking/getUspsTrackingSummaryInformation"), toValues(params))) }
 func (s *UspsService) TrackDetail(ctx context.Context, params map[string]string) (any, error) { return decode[any](s.c.http.get(ctx, s.p("/api/v3/Tracking/getUspsTrackingDetailInformation"), toValues(params))) }
 // Deprecated: Legacy carrier proxy (sunset 2027-06-30). Needs a user token: API keys get 403 API_KEY_SCOPE_REQUIRED. Use client.Shipping / client.Pickups / client.ScanForms where they cover this.
 func (s *UspsService) CreatePickup(ctx context.Context, body any) (any, error) { return decode[any](s.c.http.post(ctx, s.p("/api/v3/CarrierPickup/postUspsCreateCarrierPickupSchedule"), body)) }
 // Deprecated: Legacy carrier proxy (sunset 2027-06-30). Needs a user token: API keys get 403 API_KEY_SCOPE_REQUIRED. Use client.Shipping / client.Pickups / client.ScanForms where they cover this.
-func (s *UspsService) CancelPickup(ctx context.Context) error { _, err := s.c.http.del(ctx, s.p("/api/v3/CarrierPickup/cancelUspsCarrierPickupSchedule")); return err }
+func (s *UspsService) CancelPickup(ctx context.Context, confirmationNumber string) error {
+	return s.cancel(ctx, "CancelPickup", "a confirmation number", "/api/v3/CarrierPickup/cancelUspsCarrierPickupSchedule", "confirmationNumber", confirmationNumber)
+}
 // Deprecated: Legacy carrier proxy (sunset 2027-06-30). Needs a user token: API keys get 403 API_KEY_SCOPE_REQUIRED. Use client.Shipping / client.Pickups / client.ScanForms where they cover this.
 func (s *UspsService) CreateScanForm(ctx context.Context, body any) (any, error) { return decode[any](s.c.http.post(ctx, s.p("/api/v3/ScanForm/postUspsCreateScanFormLabelShipment"), body)) }
 func (s *UspsService) DeliveryStandards(ctx context.Context, params map[string]string) (any, error) { return decode[any](s.c.http.get(ctx, s.p("/api/v3/ServiceStandards/getUspsGetDeliveryStandardsEstimates"), toValues(params))) }

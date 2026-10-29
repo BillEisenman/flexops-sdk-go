@@ -70,6 +70,44 @@ func TestShipping_UsesGatewayRoutes(t *testing.T) {
 	}
 }
 
+func TestUsps_CancelsNameWhatTheyCancel(t *testing.T) {
+	var seen []string
+	client, _ := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		seen = append(seen, r.Method+" "+r.URL.EscapedPath()+query(r))
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	ctx := context.Background()
+	usps := client.Carriers.USPS
+
+	//lint:ignore SA1019 the legacy proxy writes are deprecated by design; this checks they still work.
+	if err := usps.CancelPickup(ctx, "WTC 123"); err != nil {
+		t.Fatal(err)
+	}
+	//lint:ignore SA1019 see above
+	if err := usps.CancelDomesticLabel(ctx, "9400111899223456789012"); err != nil {
+		t.Fatal(err)
+	}
+	//lint:ignore SA1019 see above
+	if err := usps.CancelInternationalLabel(ctx, "LZ123456789US"); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{
+		"DELETE /api/ApiProxy/api/v3/CarrierPickup/cancelUspsCarrierPickupSchedule?confirmationNumber=WTC+123",
+		"DELETE /api/ApiProxy/api/v3/Shipping/cancelUspsDomesticShipmentLabel?trackingNumber=9400111899223456789012",
+		"DELETE /api/ApiProxy/api/v3/Shipping/cancelUspsInternationalShipmentLabel?internationalTrackingNumber=LZ123456789US",
+	}
+	if strings.Join(seen, "\n") != strings.Join(want, "\n") {
+		t.Fatalf("calls:\n%s\nwant:\n%s", strings.Join(seen, "\n"), strings.Join(want, "\n"))
+	}
+	//lint:ignore SA1019 see above
+	if err := usps.CancelPickup(ctx, " "); err == nil || !strings.Contains(err.Error(), "confirmation number") {
+		t.Fatalf("expected a confirmation number error, got %v", err)
+	}
+	if len(seen) != 3 {
+		t.Errorf("sent a cancel without a confirmation number")
+	}
+}
+
 func TestShipping_CancelLabelNeedsCarrierCode(t *testing.T) {
 	calls := 0
 	client, _ := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { calls++ }))
