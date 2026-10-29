@@ -108,6 +108,10 @@ func (h *httpClient) del(ctx context.Context, path string) ([]byte, error) {
 	return h.do(ctx, http.MethodDelete, path, nil, nil)
 }
 
+func (h *httpClient) delQuery(ctx context.Context, path string, query url.Values) ([]byte, error) {
+	return h.do(ctx, http.MethodDelete, path, query, nil)
+}
+
 // do sends one call. Every POST, PUT and PATCH carries an Idempotency-Key (the caller's,
 // from extraHeaders or WithIdempotencyKey, else one random UUID for the call) that is
 // reused on each retry, so the Gateway replays a write it already finished instead of
