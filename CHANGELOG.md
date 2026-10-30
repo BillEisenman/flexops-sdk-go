@@ -7,12 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.3.0] - 2026-10-30
+
 ### Added
 - `ScanFormRequest` has `ManifestDate` (`"YYYY-MM-DD"`), `RequestID`, `OriginPostalCode` and `WarehouseID`, the fields
   of the Gateway's SCAN form request. Live creation needs `ManifestDate`: without it the Gateway answers 400
   `Choose the label mailing date.` It stays optional because the sandbox defaults it to today.
 
 ### Changed
+- The Gateway previews sandbox labels too: a `test_` key now needs `maximumPostageAmount`, and the label comes from the approval.
 - `ScanFormRequest.Carrier` is deprecated and sent only when set (`omitempty`): the Gateway has no carrier field on this
   request and ignores it.
 - Docs: `Pickups.Schedule`/`Cancel` and `ScanForms.Create` need `shipping:write` with an API key, and the public demo
